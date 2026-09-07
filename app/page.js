@@ -1,7 +1,9 @@
+import SelectDb from "@/selectDb";
+
 export default function Home() {
   return (
     <main>
-      <div>Hello World!</div>
+      <SelectDb />
     </main>
   );
 }

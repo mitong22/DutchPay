@@ -28,7 +28,7 @@ export default async function SelectDb() {
 
   return (
     <section>
-      <h1>MongoDB user collection</h1>
+      <h3>MongoDB user collection</h3>
       <p>총 {users.length}명</p>
 
       {users.length === 0 ? (

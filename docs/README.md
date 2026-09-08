@@ -1905,3 +1905,9 @@ TOGETHER
 따라서 구현 전 `expense_group.mode`의 실제 저장 값을 확정해야 한다.
 
 요구사항 확인 없이 `shared`를 임의로 `SOLO / TOGETHER`로 변경하지 않는다.
+
+
+## 초대링크 제약사항
+고유 토큰(UUID)이 포함된 URL로 생성
+초대 받은 사람이 들어오면 세션 id 생성 및 브라우저 쿠키에 저장
+생성된 세션 id는 group_member 컬렉션의 group_member._id에 저장.

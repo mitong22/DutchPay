@@ -6,10 +6,12 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <header>
-        <h1>몫대로</h1>
-      </header>
-      <body>{children}</body>
+      <body>
+        <header>
+          <h1>몫대로</h1>
+        </header>
+        {children}
+      </body>
     </html>
   );
 }

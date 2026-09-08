@@ -33,5 +33,3 @@ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
 
-
-mongodb+srv://dutchpay_app:69362fc182fdbfbd49a528aa911807f2d3670855113023db@cluster0.2izaa9b.mongodb.net/dutchpay?retryWrites=true&w=majority&appName=Cluster0

@@ -1140,3 +1140,768 @@ PC와 모바일에서 모두 사용할 수 있는 반응형 UI로 구현한다.
 설계 과정에서 요구사항이 모호하거나 선택지가 여러 개인 부분이 발견되면 임의로 판단하지 말고 질문한다.
 
 설계 내용을 먼저 보여주고 사용자의 승인을 받은 이후에 실제 코드 구현을 시작한다.
+
+## 데이터베이스 구조는
+
+MongoDB Atlas의 `dutchpay` 데이터베이스를 사용한다.
+
+현재 데이터베이스는 다음 7개 컬렉션으로 구성되어 있다.
+
+```text
+user
+account
+session
+expense_group
+group_member
+receipts
+payment
+```
+
+현재 영수증과 메뉴는 별도의 `expense_item` 컬렉션으로 분리하지 않는다.
+
+하나의 영수증을 `receipts` 문서 하나로 관리하고, 해당 영수증에 포함된 메뉴들은 `receipts.items[]` 배열에 Embedded Document 형태로 저장한다.
+
+전체적인 관계는 다음과 같다.
+
+```text
+user
+ ├─ account
+ └─ session
+
+user
+ └─ expense_group
+      │
+      ├─ group_member
+      │
+      └─ receipts
+           │
+           └─ items[]
+                │
+                └─ consumer_member_ids[]
+                     ↓
+                group_member
+
+payment
+ ├─ group_id
+ ├─ receipt_id
+ ├─ expense_item_id
+ ├─ payer_member_id
+ ├─ payee_member_id
+ └─ status
+```
+
+
+### user
+
+Better Auth에서 사용하는 실제 로그인 사용자 정보이다.
+
+이 프로젝트에서는 모임을 생성하는 총대가 Better Auth를 통해 로그인한다.
+
+주요 필드는 다음과 같다.
+
+```text
+_id
+name
+email
+emailVerified
+createdAt
+updatedAt
+```
+
+`_id`는 MongoDB `ObjectId`를 사용한다.
+
+`user`는 실제 로그인 가능한 회원 데이터이며, 모임 안에서 정산에 사용하는 `group_member`와는 별개의 개념이다.
+
+
+### account
+
+Better Auth의 로그인 제공자와 자격 증명을 관리한다.
+
+주요 필드는 다음과 같다.
+
+```text
+_id
+accountId
+providerId
+userId
+password
+createdAt
+updatedAt
+```
+
+`userId`는 `user._id`를 참조한다.
+
+credential 로그인인 경우 비밀번호 원문이 아니라 해시된 비밀번호를 저장한다.
+
+
+### session
+
+Better Auth를 통해 로그인한 총대의 로그인 세션을 관리한다.
+
+주요 필드는 다음과 같다.
+
+```text
+_id
+expiresAt
+token
+createdAt
+updatedAt
+ipAddress
+userAgent
+userId
+```
+
+`userId`는 `user._id`를 참조한다.
+
+이 `session`은 Better Auth 회원용 세션이다.
+
+카카오톡 초대를 통해 로그인 없이 들어오는 참여자가 사용하는 Guest Session과는 별개로 취급한다.
+
+
+### expense_group
+
+하나의 더치페이 모임을 의미한다.
+
+주요 필드는 다음과 같다.
+
+```text
+_id
+name
+created_by
+mode
+member_ids[]
+created_at
+```
+
+`_id`는 UUID 문자열을 사용한다.
+
+`created_by`는 해당 모임을 생성한 Better Auth 사용자의 `user._id`를 참조한다.
+
+`member_ids[]`에는 해당 모임에 속한 `group_member._id` 목록을 저장한다.
+
+현재 DB 정의서의 `mode` 값은 `shared`로 되어 있다.
+
+하지만 실제 서비스 요구사항에서는 다음 두 가지 모드가 필요하다.
+
+```text
+SOLO
+TOGETHER
+```
+
+따라서 실제 구현 전에 `expense_group.mode`를 기존 `shared` 방식으로 유지할 것인지, `SOLO / TOGETHER` 방식으로 변경할 것인지 확정해야 한다.
+
+
+### group_member
+
+더치페이 모임 안에서 실제 정산 단위로 사용하는 참여자이다.
+
+주요 필드는 다음과 같다.
+
+```text
+_id
+group_id
+user_id
+nickname
+member_type
+```
+
+`_id`는 UUID 문자열을 사용한다.
+
+`group_id`는 `expense_group._id`를 참조한다.
+
+`user_id`는 Better Auth 사용자와 연결되는 경우 `user._id`를 저장하고, 비회원 참여자는 `null`이 될 수 있다.
+
+`member_type`은 다음 값을 사용한다.
+
+```text
+registered
+guest
+```
+
+총대는 Better Auth 사용자이므로 다음과 같이 연결된다.
+
+```text
+user
+↓
+group_member
+
+user_id = user._id
+member_type = registered
+```
+
+혼자하기에서 총대가 직접 추가한 참여자는 다음과 같이 사용할 수 있다.
+
+```text
+nickname = "지현"
+user_id = null
+member_type = guest
+```
+
+함께하기에서 카카오톡 초대를 통해 들어온 비로그인 사용자 역시 실제 정산에서는 `group_member`를 기준으로 처리한다.
+
+
+### receipts
+
+하나의 영수증과 해당 영수증에 포함된 메뉴를 하나의 MongoDB 문서에 저장한다.
+
+주요 필드는 다음과 같다.
+
+```text
+_id
+group_id
+store_name
+total_amount
+paid_by_member_id
+uploaded_by_member_id
+items[]
+```
+
+각 필드의 역할은 다음과 같다.
+
+```text
+_id
+→ 영수증 ID
+
+group_id
+→ 이 영수증이 속한 더치페이 모임
+
+store_name
+→ 가게명 또는 영수증 소제목
+
+total_amount
+→ 영수증 전체 결제 금액
+
+paid_by_member_id
+→ 실제로 이 영수증 금액을 먼저 결제한 사람
+
+uploaded_by_member_id
+→ 이 영수증을 서비스에 등록한 사람
+
+items[]
+→ 영수증에 포함된 메뉴 목록
+```
+
+`paid_by_member_id`와 `uploaded_by_member_id`는 서로 다를 수 있다.
+
+예를 들어 지현이 실제 결제했고 미연이 대신 영수증을 등록했다면 다음과 같이 표현할 수 있다.
+
+```text
+paid_by_member_id
+→ 지현
+
+uploaded_by_member_id
+→ 미연
+```
+
+
+### receipts.items[]
+
+메뉴는 별도 컬렉션으로 관리하지 않고 `receipts` 내부에 Embedded Document로 저장한다.
+
+메뉴 한 건의 구조는 다음과 같다.
+
+```text
+_id
+menu_name
+quantity
+unit_price
+line_total
+consumer_member_ids[]
+```
+
+각 필드의 역할은 다음과 같다.
+
+```text
+_id
+→ 메뉴 항목 ID
+
+menu_name
+→ 메뉴명
+
+quantity
+→ 주문 수량
+
+unit_price
+→ 메뉴 1개의 단가
+
+line_total
+→ 해당 메뉴 전체 금액
+
+consumer_member_ids[]
+→ 해당 메뉴의 비용을 실제로 나눌 참여자
+```
+
+`line_total`은 다음 계산 결과와 일치해야 한다.
+
+```text
+quantity * unit_price
+```
+
+예:
+
+```text
+삼겹살
+
+quantity
+2
+
+unit_price
+15,000
+
+line_total
+30,000
+```
+
+
+### 메뉴별 참여자
+
+이 서비스의 핵심 기능 중 하나이다.
+
+같은 영수증에 포함된 메뉴라도 실제로 먹은 사람이 다를 수 있기 때문에 메뉴마다 `consumer_member_ids[]`를 별도로 저장한다.
+
+예:
+
+```text
+[1차 고깃집]
+
+삼겹살
+60,000원
+
+consumer_member_ids
+→ 미연
+→ 지현
+→ 수인
+
+
+소주
+20,000원
+
+consumer_member_ids
+→ 지현
+→ 수인
+
+
+콜라
+3,000원
+
+consumer_member_ids
+→ 미연
+```
+
+따라서 영수증 전체 금액을 영수증 참여자 수로 단순하게 나누지 않는다.
+
+각 메뉴의 `line_total`을 해당 메뉴의 `consumer_member_ids` 수로 나누어 개인별 부담 금액을 계산한다.
+
+예:
+
+```text
+삼겹살
+
+60,000 / 3
+= 20,000원씩
+
+
+소주
+
+20,000 / 2
+= 10,000원씩
+
+
+콜라
+
+3,000 / 1
+= 3,000원
+```
+
+분담 금액 자체는 DB에 별도 저장하지 않고 원본 메뉴 데이터를 기준으로 계산한다.
+
+기본 계산식은 다음과 같다.
+
+```text
+메뉴별 개인 부담금
+=
+items[].line_total / items[].consumer_member_ids.length
+```
+
+
+### 영수증 총 금액 검증
+
+`receipts.total_amount`는 모든 메뉴의 `line_total`을 더한 결과와 일치해야 한다.
+
+```text
+receipts.total_amount
+=
+sum(receipts.items[].line_total)
+```
+
+예:
+
+```text
+삼겹살 30,000
+소주    4,000
+콜라    2,000
+
+↓
+
+total_amount
+36,000
+```
+
+저장 및 수정 시 서버에서 금액 정합성을 검증한다.
+
+
+### 참여자 정합성
+
+다음 참여자들은 반드시 해당 영수증의 `group_id`와 동일한 모임에 속한 `group_member`여야 한다.
+
+```text
+paid_by_member_id
+uploaded_by_member_id
+items[].consumer_member_ids[]
+```
+
+다른 모임의 `group_member` ID를 임의로 전달하여 영수증이나 메뉴에 포함할 수 없어야 한다.
+
+이 검증은 클라이언트의 값을 그대로 신뢰하지 않고 서버에서 다시 확인한다.
+
+
+### payment
+
+`payment`는 최종 송금 결과를 한 건으로 저장하는 컬렉션이 아니라 **메뉴별 참여자의 정산 상태를 관리하는 컬렉션**이다.
+
+주요 필드는 다음과 같다.
+
+```text
+_id
+group_id
+receipt_id
+expense_item_id
+payer_member_id
+payee_member_id
+status
+created_at
+```
+
+각 필드의 역할은 다음과 같다.
+
+```text
+_id
+→ 정산 내역 ID
+
+group_id
+→ 정산이 속한 모임
+
+receipt_id
+→ 정산 대상 영수증
+
+expense_item_id
+→ 정산 대상 메뉴
+
+payer_member_id
+→ 돈을 보내야 하는 참여자
+
+payee_member_id
+→ 돈을 받을 참여자
+
+status
+→ 결제 완료 여부
+```
+
+`status`는 다음 두 값을 사용한다.
+
+```text
+paid
+unpaid
+```
+
+
+### payment와 메뉴의 관계
+
+`expense_item` 컬렉션은 사용하지 않는다.
+
+`payment.expense_item_id`는 `receipts.items[]._id`를 논리적으로 참조한다.
+
+예:
+
+```text
+receipts
+
+_id
+RECEIPT_001
+
+items
+ ├─ ITEM_001 삼겹살
+ ├─ ITEM_002 소주
+ └─ ITEM_003 콜라
+```
+
+삼겹살에 대한 정산 상태를 저장하는 경우 다음과 같이 연결한다.
+
+```text
+payment.receipt_id
+→ RECEIPT_001
+
+payment.expense_item_id
+→ ITEM_001
+```
+
+즉 다음과 같은 관계이다.
+
+```text
+receipts
+ └─ items[]
+      └─ _id
+          ↑
+          │
+payment.expense_item_id
+```
+
+
+### 메뉴별 payment 생성
+
+현재 DB 정의 기준에서는 메뉴의 `consumer_member_ids[]`에 포함된 참여자별로 `payment` 문서를 생성한다.
+
+각 `payment`는 어떤 메뉴의 어떤 참여자가 정산을 완료했는지를 판단하는 용도로 사용한다.
+
+예:
+
+```text
+[삼겹살]
+
+consumer_member_ids
+
+미연
+지현
+수인
+```
+
+각 참여자의 메뉴 정산 상태를 `payment`에서 관리한다.
+
+```text
+ITEM_001 / 미연 / unpaid
+ITEM_001 / 지현 / paid
+ITEM_001 / 수인 / unpaid
+```
+
+`payment`에는 개인별 분담 금액을 별도로 저장하지 않는다.
+
+금액이 필요한 경우 다음 값을 기준으로 계산한다.
+
+```text
+receipts.items[].line_total
+/
+receipts.items[].consumer_member_ids.length
+```
+
+
+### payment의 참조 관계
+
+`payment`는 다음 데이터를 참조한다.
+
+```text
+group_id
+→ expense_group._id
+
+receipt_id
+→ receipts._id
+
+expense_item_id
+→ receipts.items[]._id
+
+payer_member_id
+→ group_member._id
+
+payee_member_id
+→ group_member._id
+```
+
+`expense_item_id`는 MongoDB의 실제 FK가 아니라 Embedded Document의 `_id`를 애플리케이션에서 논리적으로 참조하는 구조이다.
+
+
+### 현재 MongoDB 관계 정리
+
+```text
+Better Auth
+
+user
+ ├─ account
+ └─ session
+
+
+더치페이
+
+user
+  │
+  │ created_by
+  ↓
+expense_group
+  │
+  ├──────────────┐
+  │              │
+  ↓              ↓
+group_member   receipts
+                 │
+                 ↓
+               items[]
+                 │
+                 │ consumer_member_ids[]
+                 ↓
+            group_member
+
+
+receipts.items[]._id
+        ↑
+        │
+payment.expense_item_id
+```
+
+
+### 데이터베이스에서 계산값을 다루는 원칙
+
+가능한 경우 계산 결과를 중복 저장하지 않고 원본 데이터를 기준으로 계산한다.
+
+다음 값은 원본 데이터에서 계산할 수 있다.
+
+```text
+메뉴별 개인 부담 금액
+개인별 총 부담 금액
+개인별 실제 결제 금액
+개인별 최종 잔액
+최종 정산 관계
+```
+
+특히 메뉴별 부담 금액은 별도 필드로 저장하지 않는다.
+
+```text
+line_total
+/
+consumer_member_ids.length
+```
+
+를 기준으로 계산한다.
+
+영수증이나 메뉴가 수정되면 변경된 원본 데이터를 이용하여 정산 결과를 다시 계산한다.
+
+
+### 현재 DB 정의서 기준 인덱스 검토
+
+현재 각 컬렉션에는 기본 `_id` 인덱스가 존재하는 구조이다.
+
+실제 구현 시 다음 조회 필드에 대한 보조 인덱스를 검토한다.
+
+```text
+receipts.group_id
+receipts.items._id
+
+payment.group_id
+payment.receipt_id
+payment.expense_item_id
+```
+
+Better Auth 관련해서는 사용하는 Better Auth 버전과 실제 Adapter 요구사항을 확인하여 다음 필드의 고유성 및 인덱스를 검토한다.
+
+```text
+user.email
+session.token
+```
+
+
+### 현재 DB 정의와 서비스 기획 사이에서 추가로 필요한 부분
+
+현재 MongoDB 정의서에는 다음 두 컬렉션이 존재하지 않는다.
+
+```text
+invite
+guest_session
+```
+
+하지만 함께하기 모드에서 비로그인 참여자를 카카오톡으로 초대하고, Invite Token 검증 이후 HttpOnly Cookie를 이용하여 Guest Session을 유지하려면 별도의 데이터 저장 구조가 필요하다.
+
+현재 기획상 인증 흐름은 다음과 같다.
+
+```text
+총대
+↓
+Better Auth 로그인
+↓
+함께하기 모임 생성
+↓
+Invite Token 생성
+↓
+카카오톡으로 초대 링크 전달
+↓
+초대받은 사용자가 링크 접속
+↓
+Invite Token 검증
+↓
+group_member 연결
+↓
+Guest Session Token 생성
+↓
+Guest Session DB 저장
+↓
+HttpOnly Cookie 발급
+↓
+이후 요청마다 Guest Session 확인
+```
+
+따라서 `invite`와 `guest_session`은 현재 DB에 이미 존재하는 컬렉션으로 취급하지 않는다.
+
+구현 전에 별도 컬렉션으로 추가할지 최종 정의가 필요하다.
+
+
+### 현재 정의서에서 확정되지 않은 영수증 참여자
+
+현재 `receipts`에는 다음과 같은 별도의 영수증 참여자 배열이 정의되어 있지 않다.
+
+```text
+participant_member_ids[]
+```
+
+현재 정의되어 있는 것은 메뉴별 참여자인 다음 필드이다.
+
+```text
+receipts.items[].consumer_member_ids[]
+```
+
+서비스 요구사항에는 다음 두 단계의 참여자 선택이 존재한다.
+
+```text
+영수증 참여자
+↓
+메뉴별 참여자
+```
+
+따라서 구현 전에 영수증 참여자를 다음 중 어떤 방식으로 관리할지 확정해야 한다.
+
+```text
+방법 1
+
+receipts에 별도의
+participant_member_ids[]
+필드를 추가한다.
+
+
+방법 2
+
+items[].consumer_member_ids[]의
+전체 합집합을 영수증 참여자로 계산한다.
+```
+
+이 부분은 요구사항만으로 임의 결정하지 않는다.
+
+
+### 현재 정의서에서 확정되지 않은 모임 mode
+
+현재 `expense_group.mode`의 DB 데이터는 `shared`를 기준으로 작성되어 있다.
+
+하지만 현재 서비스 기획에서는 다음 두 모드를 사용한다.
+
+```text
+SOLO
+TOGETHER
+```
+
+따라서 구현 전 `expense_group.mode`의 실제 저장 값을 확정해야 한다.
+
+요구사항 확인 없이 `shared`를 임의로 `SOLO / TOGETHER`로 변경하지 않는다.

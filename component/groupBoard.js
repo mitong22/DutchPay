@@ -229,6 +229,69 @@ function calculateGroupSettlement(group, receipts) {
   };
 }
 
+function compareMemberIds(left, right) {
+  if (left.memberId < right.memberId) {
+    return -1;
+  }
+
+  if (left.memberId > right.memberId) {
+    return 1;
+  }
+
+  return 0;
+}
+
+function calculateSettlementTransfers(memberTotals) {
+  const debtors = memberTotals
+    .filter((memberTotal) => memberTotal.balance < 0)
+    .map((memberTotal) => ({
+      memberId: memberTotal.memberId,
+      remainingAmount: Math.abs(memberTotal.balance),
+    }))
+    .sort(compareMemberIds);
+  const creditors = memberTotals
+    .filter((memberTotal) => memberTotal.balance > 0)
+    .map((memberTotal) => ({
+      memberId: memberTotal.memberId,
+      remainingAmount: memberTotal.balance,
+    }))
+    .sort(compareMemberIds);
+  const transfers = [];
+  let debtorIndex = 0;
+  let creditorIndex = 0;
+
+  while (debtorIndex < debtors.length && creditorIndex < creditors.length) {
+    const debtor = debtors[debtorIndex];
+    const creditor = creditors[creditorIndex];
+    const amount = Math.min(
+      debtor.remainingAmount,
+      creditor.remainingAmount,
+    );
+
+    if (amount > 0 && debtor.memberId !== creditor.memberId) {
+      transfers.push({
+        id: `transfer-${debtor.memberId}-${creditor.memberId}`,
+        fromMemberId: debtor.memberId,
+        toMemberId: creditor.memberId,
+        amount,
+      });
+    }
+
+    debtor.remainingAmount -= amount;
+    creditor.remainingAmount -= amount;
+
+    if (debtor.remainingAmount === 0) {
+      debtorIndex += 1;
+    }
+
+    if (creditor.remainingAmount === 0) {
+      creditorIndex += 1;
+    }
+  }
+
+  return transfers;
+}
+
 function ReceiptEntryDialog({
   currentMemberId,
   group,
@@ -705,6 +768,9 @@ function ReceiptList({ currentMemberId, group, receipts, onAdd, onSelect }) {
       memberTotal,
     ]),
   );
+  const settlementTransfers = calculateSettlementTransfers(
+    groupSettlement.memberTotals,
+  );
 
   return (
     <>
@@ -911,6 +977,86 @@ function ReceiptList({ currentMemberId, group, receipts, onAdd, onSelect }) {
         <p className={styles.settlementNote}>
           각 메뉴에서 선택한 사람을 기준으로 계산했어요.
         </p>
+
+        <section
+          className={styles.transferOverview}
+          aria-labelledby="transfer-overview-title"
+        >
+          <div className={styles.transferHeading}>
+            <div>
+              <p className={styles.eyebrow}>최종 송금</p>
+              <h3 id="transfer-overview-title">이대로 보내면 끝나요</h3>
+            </div>
+            <span>{settlementTransfers.length}건</span>
+          </div>
+
+          {settlementTransfers.length > 0 ? (
+            <div className={styles.transferList}>
+              {settlementTransfers.map((transfer) => {
+                const fromMember = findMember(
+                  group,
+                  transfer.fromMemberId,
+                );
+                const toMember = findMember(group, transfer.toMemberId);
+
+                return (
+                  <article
+                    className={styles.transferRow}
+                    key={transfer.id}
+                    aria-label={`${fromMember?.nickname ?? "알 수 없음"}에서 ${
+                      toMember?.nickname ?? "알 수 없음"
+                    }에게 ${formatWon(transfer.amount)} 송금`}
+                  >
+                    <div className={styles.transferRoute}>
+                      <span className={styles.transferParty}>
+                        <span
+                          className={`${styles.transferAvatar} ${
+                            fromMember?.id === currentMemberId
+                              ? styles.currentTransferAvatar
+                              : ""
+                          }`}
+                          aria-hidden="true"
+                        >
+                          {fromMember?.nickname.slice(0, 2) ?? "?"}
+                        </span>
+                        <strong>{fromMember?.nickname ?? "알 수 없음"}</strong>
+                      </span>
+
+                      <span className={styles.transferArrow} aria-hidden="true">
+                        →
+                      </span>
+
+                      <span className={styles.transferParty}>
+                        <span
+                          className={`${styles.transferAvatar} ${
+                            toMember?.id === currentMemberId
+                              ? styles.currentTransferAvatar
+                              : ""
+                          }`}
+                          aria-hidden="true"
+                        >
+                          {toMember?.nickname.slice(0, 2) ?? "?"}
+                        </span>
+                        <strong>{toMember?.nickname ?? "알 수 없음"}</strong>
+                      </span>
+                    </div>
+                    <strong className={styles.transferAmount}>
+                      {formatWon(transfer.amount)}
+                    </strong>
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <div className={styles.noTransfers}>
+              <span aria-hidden="true">✓</span>
+              <p>
+                <strong>주고받을 돈이 없어요.</strong>
+                <small>현재까지 정산이 모두 맞아요.</small>
+              </p>
+            </div>
+          )}
+        </section>
         </section>
       </div>
     </>

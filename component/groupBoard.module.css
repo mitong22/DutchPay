@@ -385,6 +385,140 @@
   line-height: 1.45;
 }
 
+.transferOverview {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #dbe1f3;
+}
+
+.transferHeading,
+.transferRoute,
+.transferParty,
+.noTransfers {
+  display: flex;
+  align-items: center;
+}
+
+.transferHeading {
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.transferHeading h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  letter-spacing: -0.025em;
+}
+
+.transferHeading > span {
+  padding: 6px 9px;
+  border-radius: 999px;
+  color: var(--primary-dark);
+  background: #e9edff;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.transferList {
+  display: grid;
+  gap: 8px;
+  margin-top: 15px;
+}
+
+.transferRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 58px;
+  padding: 10px 12px;
+  border: 1px solid #d9e0f3;
+  border-radius: 13px;
+  background: #ffffff;
+}
+
+.transferRoute {
+  min-width: 0;
+  gap: 8px;
+}
+
+.transferParty {
+  min-width: 0;
+  gap: 6px;
+}
+
+.transferParty strong {
+  max-width: 62px;
+  overflow: hidden;
+  font-size: 0.8rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transferAvatar {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  color: #35439b;
+  background: #ecefff;
+  box-shadow: 0 0 0 1px #d7def5;
+  font-size: 0.61rem;
+  font-weight: 800;
+}
+
+.currentTransferAvatar {
+  color: #ffffff;
+  background: var(--primary-dark);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+
+.transferArrow {
+  color: #8791ba;
+  font-weight: 900;
+}
+
+.transferAmount {
+  color: var(--primary-dark);
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.noTransfers {
+  gap: 12px;
+  margin-top: 15px;
+  padding: 15px;
+  border: 1px solid #cde7df;
+  border-radius: 13px;
+  background: #f3fbf8;
+}
+
+.noTransfers > span {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  color: #ffffff;
+  background: #48a58b;
+  font-weight: 900;
+}
+
+.noTransfers p {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+}
+
+.noTransfers small {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
 .backButton,
 .secondaryButton,
 .closeButton,

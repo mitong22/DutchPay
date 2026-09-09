@@ -138,7 +138,11 @@ STEP 3
 
 혼자하기에서는 모임 생성자가 모든 영수증을 등록하고 관리한다.
 
-기본적으로 모든 영수증의 실제 결제자는 모임 생성자이다.
+`SOLO` 모임은 초대나 대기 과정 없이 생성과 동시에 `status: "ACTIVE"`로 저장한다.
+
+`expected_member_count`에는 총대를 포함하여 생성된 전체 `group_member` 수를 저장하고, `activated_at`에는 생성 시각을 기록한다.
+
+모든 영수증의 실제 결제자인 `paid_by_member_id`는 반드시 총대와 연결된 `group_member._id`여야 하며 서버에서 이를 검증한다.
 
 
 ### 3. 함께하기
@@ -197,6 +201,12 @@ ACTIVE
 ```
 
 `ACTIVE` 상태가 된 이후부터 영수증 등록 및 정산 기능을 사용할 수 있다.
+
+`TOGETHER` 모임은 생성할 때 `status: "WAITING"`과 총대를 포함한 `expected_member_count`를 저장한다.
+
+현재 참여 인원은 별도 숫자 필드로 중복 저장하지 않고 `group_member.group_id`를 기준으로 계산한다.
+
+계산된 참여 인원이 `expected_member_count`와 같아지는 순간 서버가 `status`를 `ACTIVE`로 바꾸고 `activated_at`을 기록한다.
 
 
 ### 4. 영수증별 참여자
@@ -385,7 +395,17 @@ OCR / 이미지 분석
 
 모임 안의 모든 영수증과 메뉴를 계산한 뒤 참여자별 최종 채권과 채무를 계산한다.
 
-불필요한 중간 송금은 가능한 경우 상계한다.
+불필요한 중간 송금은 상계하며, 같은 원본 데이터에 대해 항상 같은 결과가 나오도록 다음 순서로 계산한다.
+
+```text
+1. 메뉴별 개인 부담 금액 계산
+2. 참여자별 실제 결제 금액 합산
+3. 참여자별 실제 부담 금액 합산
+4. 참여자별 최종 잔액 계산
+5. 채무자와 채권자 분리
+6. 채무자와 채권자를 각각 group_member._id 오름차순으로 정렬
+7. 앞에서부터 greedy 방식으로 표시할 최종 송금 관계 계산
+```
 
 예:
 
@@ -400,7 +420,9 @@ B의 최종 잔액이 0이라면 다음과 같이 정리한다.
 A → C 10,000원
 ```
 
-최종 화면에는 실제 필요한 송금 관계를 보여준다.
+영수증 결제자의 자기 부담분은 최종 잔액 계산에만 반영하며, 보내는 사람과 받는 사람이 같은 자기 송금 관계는 표시하지 않는다.
+
+최종 화면에는 실제 필요한 송금 관계만 보여준다.
 
 최종 상계 송금 관계는 별도 문서로 저장하지 않고 영수증과 메뉴 원본 데이터를 기준으로 요청 시마다 계산한다. 현재 `payment` 컬렉션은 최종 송금 완료 내역이 아니라 메뉴별 참여자의 부담 상태만 관리한다.
 
@@ -492,6 +514,18 @@ Guest Session Token을 HttpOnly Cookie로 전달
 현재 group_id / member_id 확인
 ```
 
+최초 참여 처리에서는 같은 Invite의 동시 사용이나 마지막 참여 자리의 중복 사용으로 인원이 초과되지 않도록 다음 작업을 MongoDB 트랜잭션 하나에서 처리한다.
+
+- `status: "ACTIVE"`, `member_id: null`, 유효한 `expires_at` 조건을 만족하는 Invite에 새 멤버 ID를 조건부로 연결
+- 현재 `group_member` 수와 `expected_member_count` 확인
+- `group_member` 생성
+- `invite.claimed_at` 기록
+- 마지막 참여자라면 `expense_group.status`를 `ACTIVE`로 변경하고 `activated_at` 기록
+
+조건부 갱신이나 예정 인원 검증에 실패하면 트랜잭션 전체를 취소하고 새 멤버를 만들지 않는다.
+
+이미 `member_id`가 연결된 Invite로 재접속한 경우에는 기존 `group_member`를 유지하고 새로운 Guest Session만 발급한다.
+
 
 ### 4. Invite Token
 
@@ -510,7 +544,7 @@ Invite Token은 해당 사용자가 특정 모임에 들어올 수 있는 자격
 - 만료된 초대인지
 - 취소된 초대인지
 
-Invite Token 원문은 DB에 그대로 저장하지 않고 해시값으로 저장하는 구조를 사용한다.
+Invite Token은 충분히 긴 암호학적으로 안전한 난수로 생성한다. 원문은 사용자에게 초대 URL로 전달하고 DB에는 SHA-256 등의 해시값만 저장한다.
 
 Invite 하나는 참여 예정 인원 중 한 자리를 의미한다. Invite 생성 시에는 아직 참여자가 입장하지 않았으므로 `member_id`를 `null`로 저장하고 `group_member`를 미리 만들지 않는다.
 
@@ -568,9 +602,9 @@ expires_at
 created_at
 ```
 
-Guest Session Token은 랜덤한 토큰을 사용한다.
+Guest Session Token은 충분히 긴 암호학적으로 안전한 난수로 생성한다.
 
-브라우저에는 Guest Session Token을 저장하고 서버에서는 해당 Token을 이용하여 MongoDB의 Guest Session 데이터를 조회한다.
+브라우저에는 Guest Session Token 원문을 HttpOnly Cookie로 전달하고, 서버에서는 동일한 방식으로 해시한 값으로 MongoDB의 Guest Session 데이터를 조회한다.
 
 `guest_session._id`와 `group_member._id`는 서로 다른 영구 식별자이다. Guest Session을 재발급해도 기존 `group_member._id`는 변경하지 않으며, `guest_session.member_id`로 기존 멤버를 참조한다. Guest Session Token 원문은 DB에 저장하지 않고 `token_hash`만 저장한다.
 
@@ -683,6 +717,10 @@ group_member
 ```
 
 정산 기능 내부에서는 로그인 방식에 관계없이 최종적으로 `group_member`를 기준으로 참여자를 처리한다.
+
+모든 서버 기능은 Better Auth Session 또는 Guest Session을 현재 `group_member` 정보로 변환하는 공통 인증 절차를 사용한다.
+
+각 요청에서는 인증 결과의 `group_id`와 `member_id`가 조회·생성·수정·삭제 대상 데이터의 모임 및 권한 범위와 일치하는지 다시 검증한다.
 
 
 ## 랜딩 페이지는
@@ -1028,7 +1066,11 @@ OCR / 이미지 분석
 
 ### 8. 영수증 수정
 
-다음 항목을 수정할 수 있다.
+일반 `TOGETHER` 참여자는 자신이 등록한 영수증만 수정하거나 삭제할 수 있다.
+
+총대는 현재 모임의 모든 영수증을 관리할 수 있고, `SOLO`에서는 총대만 영수증을 관리한다.
+
+서버에서 위 권한을 확인한 뒤 다음 항목을 수정할 수 있다.
 
 - 영수증 소제목
 - 실제 결제자
@@ -1152,12 +1194,49 @@ PC와 모바일에서 모두 사용할 수 있는 반응형 UI로 구현한다.
 - Invite Token의 정확한 만료 기간
 - Guest Session의 정확한 만료 기간
 - Cookie의 정확한 유지 기간
-- OCR 서비스 선택
-- 송금 최소화 알고리즘의 세부 정책
+- OCR 서비스와 영수증 이미지 저장 방식
 
 위 항목이 구현 과정에서 필요해지면 임의로 결정하지 말고 사용자에게 먼저 질문한다.
 
 요구사항에서 알 수 없는 데이터나 정책을 추측하여 구현하지 않는다.
+
+### 환경변수와 비밀정보
+
+MongoDB 접속 URI와 인증 Secret을 소스 또는 Git이 추적하는 문서에 직접 기록하지 않는다.
+
+로컬 개발 값은 Git에서 제외되는 `.env.local`에 저장하고, 운영 값은 배포 환경의 비밀 환경변수로 관리한다.
+
+```dotenv
+MONGODB_URI=<MongoDB URI>
+MONGODB_DB=dutchpay
+BETTER_AUTH_SECRET=<충분히 긴 랜덤 Secret>
+BETTER_AUTH_URL=http://localhost:3000
+```
+
+운영 환경에서는 `BETTER_AUTH_URL`을 실제 배포 URL로 설정한다.
+
+Git 이력에서 인증 정보가 포함된 MongoDB URI가 확인되었으므로, 해당 자격 증명이 아직 유효하다면 Atlas에서 즉시 폐기·교체한다. 새 자격 증명은 로컬 및 배포 환경변수에만 등록한다.
+
+### 페이지 기본 설정
+
+한국어 서비스에 맞춰 Root Layout과 metadata를 다음 기준으로 구현한다.
+
+- `<html lang="ko">`를 사용한다.
+- `<header>`를 `<body>` 내부에 둔다.
+- 페이지 제목은 `몫대로`로 설정한다.
+- 페이지 설명에는 메뉴별 참여자를 기준으로 정산하는 더치페이 서비스임을 적는다.
+- 루트 경로 `/`에는 로그인과 모임 생성 Stepper를 둔다.
+- 개발용 사용자·DB 연결 확인 화면은 루트에서 분리하고 개발 환경에서만 접근할 수 있게 한다.
+
+### 서버 검증과 권한
+
+클라이언트가 전달한 ID, 권한 정보, 정산 계산 결과를 그대로 신뢰하지 않는다.
+
+모든 조회·생성·수정·삭제 요청에서 현재 세션을 `group_member`로 변환하고, 인증 결과의 `group_id`와 `member_id`를 대상 데이터와 비교한다.
+
+일반 `TOGETHER` 참여자는 자신이 등록한 영수증만 수정·삭제할 수 있고, 총대는 해당 그룹의 모든 영수증을 관리할 수 있다. `SOLO`에서는 총대만 영수증을 관리하며 모든 영수증의 `paid_by_member_id`가 총대의 `group_member._id`인지 서버에서 확인한다.
+
+모임·멤버·영수증·메뉴·초대·결제 상태 문서의 참조와 금액 정합성도 서버에서 검증한다.
 
 바로 코드를 수정하지 않는다.
 
@@ -1902,6 +1981,21 @@ payment.expense_item_id
 영수증이나 메뉴가 수정되면 변경된 원본 데이터를 이용하여 정산 결과를 다시 계산한다.
 
 
+### MongoDB validator와 서버 검증
+
+업무 컬렉션을 생성하거나 변경할 때 MongoDB validator로 최소한 다음 항목을 보호한다.
+
+- 필수 필드 존재 여부
+- 문자열, 숫자, 날짜, 배열 등 기본 BSON 타입
+- `expense_group.mode`의 `SOLO | TOGETHER` 값
+- `expense_group.status`의 `WAITING | ACTIVE` 값
+- `invite.status`의 `ACTIVE | REVOKED | EXPIRED` 값
+- `payment.status`의 `paid | unpaid` 값
+- 금액과 참여 예정 인원에 허용되는 최소값
+
+컬렉션 간 참조, 같은 모임 소속 여부, 메뉴 참여자의 부분집합 관계, 10원 단위 안전한 정수 여부와 금액 합계처럼 다른 문서나 여러 필드를 함께 확인해야 하는 규칙은 서버에서도 다시 검증한다.
+
+
 ### 현재 DB 정의서 기준 인덱스 검토
 
 현재 각 컬렉션에는 기본 `_id` 인덱스가 존재하는 구조이다.
@@ -1909,7 +2003,10 @@ payment.expense_item_id
 실제 구현 시 다음 조회 필드에 대한 보조 인덱스를 검토한다.
 
 ```text
+expense_group.created_by
+
 group_member.group_id
+group_member.group_id + group_member.member_type
 
 receipts.group_id
 receipts.items._id
@@ -1920,13 +2017,17 @@ payment.expense_item_id
 
 invite.group_id
 invite.token_hash
+invite.expires_at
 
 guest_session.group_id
 guest_session.member_id
 guest_session.token_hash
+guest_session.expires_at
 ```
 
-`payment`는 `(receipt_id, expense_item_id, payer_member_id)` 조합이 중복되지 않도록 복합 고유 인덱스를 사용한다. `invite.token_hash`와 `guest_session.token_hash`는 각각 고유 인덱스를 사용한다. `expires_at`에는 만료 데이터 정리를 위한 TTL 인덱스를 검토한다.
+`group_member`는 `member_type: "registered"`인 문서에만 `(group_id, member_type)` 복합 고유 인덱스를 적용하여 모임마다 등록된 총대가 한 명만 존재하게 한다.
+
+`payment`는 `(receipt_id, expense_item_id, payer_member_id)` 조합이 중복되지 않도록 복합 고유 인덱스를 사용한다. `invite.token_hash`와 `guest_session.token_hash`는 각각 고유 인덱스를 사용한다. `invite.expires_at`과 `guest_session.expires_at`에는 만료 데이터 정리를 위한 TTL 인덱스를 사용한다.
 
 Better Auth 관련해서는 사용하는 Better Auth 버전과 실제 Adapter 요구사항을 확인하여 다음 필드의 고유성 및 인덱스를 검토한다.
 
@@ -2084,10 +2185,12 @@ npm run seed:write
 
 ## 초대링크 제약사항
 
-- 고유한 무작위 Token이 포함된 URL로 생성한다.
+- 충분히 긴 암호학적으로 안전한 무작위 Token이 포함된 고유 URL로 생성한다.
 - 초대 링크 하나는 참여 예정 인원 중 한 자리만 나타낸다.
-- 최초 접속 시 `group_member`를 생성하고 `invite.member_id`에 연결한다.
+- 최초 접속 시 유효한 미사용 Invite의 조건부 갱신, 예정 인원 확인, `group_member` 생성과 `invite.member_id` 연결을 하나의 트랜잭션으로 처리한다.
+- 실제 참여 인원이 `expected_member_count`를 넘지 않도록 서버에서 다시 확인한다.
 - 재접속 시 기존 `group_member`를 유지하고 새 Guest Session만 발급한다.
+- `REVOKED` 또는 `EXPIRED` 상태인 Invite로는 최초 참여와 Guest Session 재발급을 모두 허용하지 않는다.
 - Guest Session Token은 브라우저의 HttpOnly Cookie에 저장한다.
 - DB에는 Invite Token과 Guest Session Token의 해시만 저장한다.
 - `guest_session.member_id`가 `group_member._id`를 참조하며 두 `_id`를 동일하게 사용하지 않는다.

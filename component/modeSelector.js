@@ -542,13 +542,6 @@ export default function ModeSelector({ captain }) {
     notifyStoreChange();
   }
 
-  function resetDemo() {
-    window.localStorage.removeItem(ACTIVE_GROUP_KEY);
-    window.localStorage.removeItem(DRAFT_KEY);
-    window.localStorage.removeItem(LEGACY_MODE_KEY);
-    notifyStoreChange();
-  }
-
   return (
     <div className={styles.pageShell}>
       <header className={styles.header}>
@@ -560,7 +553,7 @@ export default function ModeSelector({ captain }) {
       </header>
 
       {showCompleted ? (
-        <GroupBoard group={activeGroup} onReset={resetDemo} />
+        <GroupBoard group={activeGroup} />
       ) : (
         <main className={styles.main}>
           <Stepper currentStep={draft.step} />

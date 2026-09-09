@@ -1,24 +1,15 @@
 .boardMain {
-  width: min(1120px, calc(100% - 32px));
+  width: min(780px, calc(100% - 32px));
   margin: 0 auto;
-  padding: 44px 0 72px;
+  padding: 58px 0 80px;
 }
 
-.groupOverview,
-.receiptPanel,
-.detailPanel {
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  background: var(--surface);
-}
-
-.groupOverview {
-  padding: 30px;
-}
-
-.groupHeading,
-.panelHeading,
-.dialogHeading {
+.boardIntro,
+.memberStrip,
+.listHeading,
+.detailHeading,
+.dialogHeading,
+.itemHeading {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -26,76 +17,174 @@
 }
 
 .eyebrow {
-  margin: 0 0 7px;
+  margin: 0 0 8px;
   color: var(--primary);
   font-size: 0.85rem;
   font-weight: 800;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
 }
 
-.groupHeading h1 {
+.boardIntro h1,
+.detailHeading h1 {
   margin: 0;
-  font-size: clamp(1.75rem, 4vw, 2.25rem);
-  letter-spacing: -0.04em;
+  font-size: clamp(1.8rem, 5vw, 2.4rem);
+  letter-spacing: -0.045em;
 }
 
-.memberArea {
-  margin-top: 24px;
-  padding-top: 22px;
-  border-top: 1px solid var(--border);
-}
-
-.memberArea > p {
-  margin: 0 0 12px;
+.boardIntro > div > p:last-child {
+  margin: 12px 0 0;
   color: var(--muted);
-  font-size: 0.9rem;
-  font-weight: 700;
+  line-height: 1.55;
+}
+
+.receiptCount {
+  flex: 0 0 auto;
+  padding: 13px 17px;
+  border-radius: 999px;
+  color: #347a69;
+  background: #e9f7f2;
+  font-weight: 800;
+}
+
+.memberStrip {
+  margin-top: 32px;
+  padding: 24px;
+  border-radius: 18px;
+  background: #f8f9fc;
 }
 
 .memberList {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
 }
 
-.memberList span {
-  padding: 8px 12px;
-  border: 1px solid #d9def5;
-  border-radius: 999px;
-  color: #3847a3;
-  background: #f4f6ff;
-  font-size: 0.9rem;
+.memberAvatar {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border: 3px solid #f8f9fc;
+  border-radius: 50%;
+  color: #35439b;
+  background: #eef0ff;
+  font-weight: 800;
+}
+
+.memberAvatar + .memberAvatar {
+  margin-left: -8px;
+}
+
+.memberStrip > p {
+  margin: 0;
+  color: var(--muted);
   font-weight: 700;
 }
 
-.boardGrid {
+.listHeading {
+  margin-top: 42px;
+}
+
+.listHeading h2,
+.itemHeading h2,
+.dialog h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+}
+
+.listHeading p,
+.itemHeading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.receiptList,
+.itemList {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
-  gap: 18px;
+  gap: 14px;
   margin-top: 18px;
 }
 
-.receiptPanel,
-.detailPanel {
-  min-height: 360px;
-  padding: 28px;
+.receiptRow,
+.addReceiptRow {
+  width: 100%;
+  min-height: 124px;
+  padding: 25px 26px;
+  border: 1px solid transparent;
+  border-radius: 20px;
+  background: #f8f9fc;
+  text-align: left;
+  cursor: pointer;
 }
 
-.panelHeading h2,
-.detailPanel h2,
-.dialog h2 {
-  margin: 0;
-  letter-spacing: -0.025em;
+.receiptRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  color: var(--foreground);
 }
 
-.panelHeading p {
-  margin: 6px 0 0;
+.receiptRow:hover,
+.addReceiptRow:hover {
+  border-color: #cbd2f6;
+  background: #f3f5ff;
+}
+
+.receiptPrimary,
+.receiptMeta,
+.addReceiptRow > span:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.receiptPrimary strong,
+.receiptMeta strong,
+.addReceiptRow strong {
+  font-size: 1.06rem;
+}
+
+.receiptPrimary small,
+.receiptMeta small,
+.addReceiptRow small {
   color: var(--muted);
+  font-size: 0.9rem;
 }
 
-.primaryButton,
+.receiptMeta {
+  align-items: flex-end;
+  flex: 0 0 auto;
+}
+
+.receiptMeta small {
+  color: var(--primary);
+}
+
+.addReceiptRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: var(--foreground);
+  border-style: dashed;
+  border-color: #cbd2e9;
+}
+
+.addIcon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  color: #ffffff;
+  background: var(--primary);
+  font-size: 1.45rem;
+}
+
+.backButton,
 .secondaryButton,
-.emptyAddButton,
 .closeButton,
 .methodTabs button {
   border: 0;
@@ -104,77 +193,67 @@
   cursor: pointer;
 }
 
-.primaryButton,
-.secondaryButton,
-.emptyAddButton {
-  min-height: 44px;
-  padding: 0 17px;
+.backButton {
+  padding: 9px 12px;
+  color: var(--primary-dark);
+  background: #edf0ff;
 }
 
-.primaryButton,
-.emptyAddButton {
-  color: #ffffff;
-  background: var(--primary);
-}
-
-.primaryButton:hover,
-.emptyAddButton:hover {
-  background: var(--primary-dark);
-}
-
-.secondaryButton {
+.detailView {
+  padding: 32px;
   border: 1px solid var(--border);
-  color: var(--foreground);
+  border-radius: 22px;
   background: var(--surface);
 }
 
-.secondaryButton:hover {
-  background: #f7f8fc;
+.detailHeading {
+  margin-top: 28px;
+  padding-bottom: 26px;
+  border-bottom: 1px solid var(--border);
 }
 
-.primaryButton:focus-visible,
-.secondaryButton:focus-visible,
-.emptyAddButton:focus-visible,
-.closeButton:focus-visible,
-.methodTabs button:focus-visible {
-  outline: 3px solid rgba(83, 102, 236, 0.3);
-  outline-offset: 3px;
+.detailHeading > strong {
+  flex: 0 0 auto;
+  font-size: 1.3rem;
 }
 
-.emptyState {
+.receiptSummary {
   display: grid;
-  min-height: 255px;
-  place-items: center;
-  align-content: center;
-  padding: 36px 20px;
-  border: 1px dashed #cdd4ee;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 22px 0 34px;
+}
+
+.receiptSummary > div {
+  padding: 18px;
   border-radius: 14px;
-  margin-top: 24px;
-  text-align: center;
+  background: #f8f9fc;
 }
 
-.emptyState strong {
-  font-size: 1.05rem;
-}
-
-.emptyState p {
-  margin: 9px 0 20px;
+.receiptSummary dt {
   color: var(--muted);
-  line-height: 1.55;
+  font-size: 0.85rem;
 }
 
-.detailPanel {
+.receiptSummary dd {
+  margin: 8px 0 0;
+  font-weight: 800;
+}
+
+.itemRow {
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  text-align: center;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
 }
 
-.detailPanel > p:last-child {
-  margin: 12px auto 0;
-  max-width: 300px;
+.itemRow p {
+  margin: 7px 0 0;
   color: var(--muted);
-  line-height: 1.55;
+  font-size: 0.9rem;
 }
 
 .dialogBackdrop {
@@ -235,41 +314,70 @@
   text-align: center;
 }
 
+.secondaryButton {
+  min-height: 44px;
+  padding: 0 17px;
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  background: var(--surface);
+}
+
+.secondaryButton:hover {
+  background: #f7f8fc;
+}
+
 .dialogActions {
   display: flex;
   justify-content: flex-end;
   margin-top: 22px;
 }
 
-@media (max-width: 760px) {
+.receiptRow:focus-visible,
+.addReceiptRow:focus-visible,
+.backButton:focus-visible,
+.secondaryButton:focus-visible,
+.closeButton:focus-visible,
+.methodTabs button:focus-visible {
+  outline: 3px solid rgba(83, 102, 236, 0.3);
+  outline-offset: 3px;
+}
+
+@media (max-width: 640px) {
   .boardMain {
-    width: min(100% - 24px, 560px);
-    padding: 28px 0 52px;
+    width: min(100% - 24px, 520px);
+    padding: 36px 0 56px;
   }
 
-  .groupOverview,
-  .receiptPanel,
-  .detailPanel {
-    padding: 22px 20px;
+  .boardIntro {
+    align-items: flex-start;
+    flex-direction: column-reverse;
   }
 
-  .groupHeading {
+  .memberStrip,
+  .receiptRow,
+  .addReceiptRow {
+    padding: 20px;
+  }
+
+  .listHeading {
+    align-items: flex-end;
+  }
+
+  .receiptRow {
+    min-height: 116px;
+  }
+
+  .detailView {
+    padding: 24px 20px;
+  }
+
+  .detailHeading {
     align-items: flex-start;
     flex-direction: column;
   }
 
-  .boardGrid {
+  .receiptSummary {
     grid-template-columns: 1fr;
-  }
-
-  .receiptPanel,
-  .detailPanel {
-    min-height: auto;
-  }
-
-  .detailPanel {
-    padding-top: 44px;
-    padding-bottom: 44px;
   }
 
   .methodTabs {

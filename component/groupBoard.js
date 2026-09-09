@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState, useSyncExternalStore } from "react";
 
 import styles from "./groupBoard.module.css";
 
+const RECEIPT_STORE_EVENT = "dutchpay-receipt-store-change";
+const EMPTY_RECEIPTS_SNAPSHOT = "[]";
 const RECEIPT_METHODS = [
   {
     id: "manual",
@@ -21,6 +23,58 @@ const RECEIPT_METHODS = [
     description: "기기에 저장된 영수증 사진을 선택해요.",
   },
 ];
+
+function getReceiptStoreKey(groupId) {
+  return `dutchpay:receipts:${groupId}`;
+}
+
+function getReceiptsSnapshot(groupId) {
+  try {
+    return (
+      window.localStorage.getItem(getReceiptStoreKey(groupId)) ??
+      EMPTY_RECEIPTS_SNAPSHOT
+    );
+  } catch {
+    return EMPTY_RECEIPTS_SNAPSHOT;
+  }
+}
+
+function getServerReceiptsSnapshot() {
+  return EMPTY_RECEIPTS_SNAPSHOT;
+}
+
+function subscribeToReceipts(callback) {
+  window.addEventListener("storage", callback);
+  window.addEventListener(RECEIPT_STORE_EVENT, callback);
+
+  return () => {
+    window.removeEventListener("storage", callback);
+    window.removeEventListener(RECEIPT_STORE_EVENT, callback);
+  };
+}
+
+function parseReceipts(snapshot) {
+  try {
+    const receipts = JSON.parse(snapshot);
+    return Array.isArray(receipts) ? receipts : [];
+  } catch {
+    return [];
+  }
+}
+
+function formatWon(amount) {
+  return `${Number(amount).toLocaleString("ko-KR")}원`;
+}
+
+function findMember(group, memberId) {
+  return group.members.find((member) => member.id === memberId);
+}
+
+function getMemberNames(group, memberIds = []) {
+  return memberIds
+    .map((memberId) => findMember(group, memberId)?.nickname)
+    .filter(Boolean);
+}
 
 function ReceiptEntryDialog({ onClose }) {
   const [selectedMethod, setSelectedMethod] = useState("manual");
@@ -82,71 +136,173 @@ function ReceiptEntryDialog({ onClose }) {
   );
 }
 
-export default function GroupBoard({ group, onReset }) {
+function ReceiptList({ group, receipts, onAdd, onSelect }) {
+  return (
+    <>
+      <section className={styles.boardIntro} aria-labelledby="board-title">
+        <div>
+          <p className={styles.eyebrow}>{group.name}</p>
+          <h1 id="board-title">모임 영수증을 모아볼게요</h1>
+          <p>영수증마다 결제자와 함께 먹은 사람을 기록해요.</p>
+        </div>
+        <span className={styles.receiptCount}>{receipts.length}장 등록</span>
+      </section>
+
+      <section className={styles.memberStrip} aria-label="현재 모임 멤버">
+        <div className={styles.memberList}>
+          {group.members.map((member) => (
+            <span
+              className={styles.memberAvatar}
+              title={member.nickname}
+              key={member.id}
+            >
+              {member.nickname.slice(0, 1)}
+            </span>
+          ))}
+        </div>
+        <p>총 {group.members.length}명</p>
+      </section>
+
+      <div className={styles.listHeading}>
+        <h2>모임 영수증</h2>
+        <p>결제자와 참여 인원 포함</p>
+      </div>
+
+      <section className={styles.receiptList} aria-label="영수증 목록">
+        {receipts.map((receipt) => {
+          const payer = findMember(group, receipt.paid_by_member_id);
+          const participantCount = receipt.participant_member_ids?.length ?? 0;
+          const itemCount = receipt.items?.length ?? 0;
+
+          return (
+            <button
+              className={styles.receiptRow}
+              type="button"
+              key={receipt.id}
+              onClick={() => onSelect(receipt.id)}
+            >
+              <span className={styles.receiptPrimary}>
+                <strong>{receipt.title}</strong>
+                <small>
+                  참여 {participantCount}명 · 메뉴 {itemCount}개
+                </small>
+              </span>
+              <span className={styles.receiptMeta}>
+                <strong>{formatWon(receipt.total_amount)}</strong>
+                <small>{payer?.nickname ?? "결제자 미정"} 결제</small>
+              </span>
+            </button>
+          );
+        })}
+
+        <button className={styles.addReceiptRow} type="button" onClick={onAdd}>
+          <span className={styles.addIcon} aria-hidden="true">
+            +
+          </span>
+          <span>
+            <strong>
+              {receipts.length === 0 ? "첫 영수증 추가" : "영수증 추가"}
+            </strong>
+            <small>직접 입력 · 촬영하기 · 사진 첨부</small>
+          </span>
+        </button>
+      </section>
+    </>
+  );
+}
+
+function ReceiptDetail({ group, receipt, onBack }) {
+  const payer = findMember(group, receipt.paid_by_member_id);
+  const participantNames = getMemberNames(
+    group,
+    receipt.participant_member_ids,
+  );
+
+  return (
+    <section className={styles.detailView} aria-labelledby="receipt-detail-title">
+      <button className={styles.backButton} type="button" onClick={onBack}>
+        ← 영수증 목록
+      </button>
+
+      <div className={styles.detailHeading}>
+        <div>
+          <p className={styles.eyebrow}>{group.name}</p>
+          <h1 id="receipt-detail-title">{receipt.title}</h1>
+        </div>
+        <strong>{formatWon(receipt.total_amount)}</strong>
+      </div>
+
+      <dl className={styles.receiptSummary}>
+        <div>
+          <dt>결제자</dt>
+          <dd>{payer?.nickname ?? "미정"}</dd>
+        </div>
+        <div>
+          <dt>영수증 참여자</dt>
+          <dd>{participantNames.join(" · ") || "미정"}</dd>
+        </div>
+      </dl>
+
+      <div className={styles.itemHeading}>
+        <h2>메뉴와 부담할 사람</h2>
+        <p>{receipt.items?.length ?? 0}개 메뉴</p>
+      </div>
+
+      <div className={styles.itemList}>
+        {(receipt.items ?? []).map((item) => {
+          const consumerNames = getMemberNames(
+            group,
+            item.consumer_member_ids,
+          );
+
+          return (
+            <article className={styles.itemRow} key={item.id}>
+              <div>
+                <strong>{item.name}</strong>
+                <p>{consumerNames.join(" · ") || "부담할 사람 미정"}</p>
+              </div>
+              <strong>{formatWon(item.amount)}</strong>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+export default function GroupBoard({ group }) {
   const [isReceiptDialogOpen, setIsReceiptDialogOpen] = useState(false);
-  const receipts = [];
+  const [selectedReceiptId, setSelectedReceiptId] = useState(null);
+  const readReceiptSnapshot = useCallback(
+    () => getReceiptsSnapshot(group.id),
+    [group.id],
+  );
+  const receiptsSnapshot = useSyncExternalStore(
+    subscribeToReceipts,
+    readReceiptSnapshot,
+    getServerReceiptsSnapshot,
+  );
+  const receipts = parseReceipts(receiptsSnapshot);
+  const selectedReceipt = receipts.find(
+    (receipt) => receipt.id === selectedReceiptId,
+  );
 
   return (
     <main className={styles.boardMain}>
-      <section className={styles.groupOverview} aria-labelledby="group-name">
-        <div className={styles.groupHeading}>
-          <div>
-            <p className={styles.eyebrow}>SOLO · 진행 중</p>
-            <h1 id="group-name">{group.name}</h1>
-          </div>
-          <button className={styles.secondaryButton} type="button" onClick={onReset}>
-            새 모임 만들기
-          </button>
-        </div>
-
-        <div className={styles.memberArea}>
-          <p>현재 모임 멤버 · {group.members.length}명</p>
-          <div className={styles.memberList}>
-            {group.members.map((member) => (
-              <span key={member.id}>
-                {member.nickname}
-                {member.member_type === "registered" ? " · 총대" : ""}
-              </span>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <div className={styles.boardGrid}>
-        <section className={styles.receiptPanel} aria-labelledby="receipt-list-title">
-          <div className={styles.panelHeading}>
-            <div>
-              <h2 id="receipt-list-title">영수증 목록</h2>
-              <p>{receipts.length}개</p>
-            </div>
-            <button
-              className={styles.primaryButton}
-              type="button"
-              onClick={() => setIsReceiptDialogOpen(true)}
-            >
-              + 영수증 추가
-            </button>
-          </div>
-
-          <div className={styles.emptyState}>
-            <strong>등록된 영수증이 없어요</strong>
-            <p>첫 영수증을 추가하면 이곳에서 바로 확인할 수 있어요.</p>
-            <button
-              className={styles.emptyAddButton}
-              type="button"
-              onClick={() => setIsReceiptDialogOpen(true)}
-            >
-              첫 영수증 추가
-            </button>
-          </div>
-        </section>
-
-        <aside className={styles.detailPanel} aria-labelledby="receipt-detail-title">
-          <p className={styles.eyebrow}>영수증 상세</p>
-          <h2 id="receipt-detail-title">영수증을 선택해 주세요</h2>
-          <p>등록된 영수증을 선택하면 메뉴와 참여자를 확인할 수 있어요.</p>
-        </aside>
-      </div>
+      {selectedReceipt ? (
+        <ReceiptDetail
+          group={group}
+          receipt={selectedReceipt}
+          onBack={() => setSelectedReceiptId(null)}
+        />
+      ) : (
+        <ReceiptList
+          group={group}
+          receipts={receipts}
+          onAdd={() => setIsReceiptDialogOpen(true)}
+          onSelect={setSelectedReceiptId}
+        />
+      )}
 
       {isReceiptDialogOpen && (
         <ReceiptEntryDialog onClose={() => setIsReceiptDialogOpen(false)} />

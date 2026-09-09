@@ -183,6 +183,52 @@ function calculateReceiptShares(receipt) {
   };
 }
 
+function calculateGroupSettlement(group, receipts) {
+  const totalsByMember = new Map(
+    group.members.map((member) => [
+      member.id,
+      {
+        memberId: member.id,
+        paidAmount: 0,
+        owedAmount: 0,
+      },
+    ]),
+  );
+  let totalAmount = 0;
+
+  for (const receipt of receipts) {
+    const receiptTotal = Number(receipt.total_amount);
+
+    if (Number.isSafeInteger(receiptTotal) && receiptTotal >= 0) {
+      totalAmount += receiptTotal;
+
+      const payerTotal = totalsByMember.get(receipt.paid_by_member_id);
+
+      if (payerTotal) {
+        payerTotal.paidAmount += receiptTotal;
+      }
+    }
+
+    const receiptShares = calculateReceiptShares(receipt);
+
+    for (const share of receiptShares.memberTotals) {
+      const memberTotal = totalsByMember.get(share.memberId);
+
+      if (memberTotal) {
+        memberTotal.owedAmount += share.amount;
+      }
+    }
+  }
+
+  return {
+    totalAmount,
+    memberTotals: [...totalsByMember.values()].map((memberTotal) => ({
+      ...memberTotal,
+      balance: memberTotal.paidAmount - memberTotal.owedAmount,
+    })),
+  };
+}
+
 function ReceiptEntryDialog({
   currentMemberId,
   group,
@@ -652,6 +698,13 @@ function ReceiptList({ currentMemberId, group, receipts, onAdd, onSelect }) {
     ...group.members.filter((member) => member.member_type === "registered"),
     ...group.members.filter((member) => member.member_type !== "registered"),
   ];
+  const groupSettlement = calculateGroupSettlement(group, receipts);
+  const settlementByMember = new Map(
+    groupSettlement.memberTotals.map((memberTotal) => [
+      memberTotal.memberId,
+      memberTotal,
+    ]),
+  );
 
   return (
     <>
@@ -742,6 +795,114 @@ function ReceiptList({ currentMemberId, group, receipts, onAdd, onSelect }) {
             <small>직접 입력 · 촬영하기 · 사진 첨부</small>
           </span>
         </button>
+      </section>
+
+      <section
+        className={styles.settlementOverview}
+        aria-labelledby="settlement-overview-title"
+      >
+        <div className={styles.settlementOverviewHeading}>
+          <div>
+            <p className={styles.eyebrow}>현재까지</p>
+            <h2 id="settlement-overview-title">사람별 정산 현황</h2>
+          </div>
+          <span className={styles.settlementGrandTotal}>
+            <small>{receipts.length}장 합계</small>
+            <strong>{formatWon(groupSettlement.totalAmount)}</strong>
+          </span>
+        </div>
+
+        {receipts.length > 0 ? (
+          <div className={styles.settlementMemberList}>
+            {orderedMembers.map((member) => {
+              const memberTotal = settlementByMember.get(member.id) ?? {
+                paidAmount: 0,
+                owedAmount: 0,
+                balance: 0,
+              };
+              const isCaptain = member.member_type === "registered";
+              const isCurrentMember = member.id === currentMemberId;
+              const balanceType =
+                memberTotal.balance > 0
+                  ? "receive"
+                  : memberTotal.balance < 0
+                    ? "send"
+                    : "settled";
+              const balanceLabel =
+                balanceType === "receive"
+                  ? "받을 돈"
+                  : balanceType === "send"
+                    ? "보낼 돈"
+                    : "정산 완료";
+              const balancePrefix =
+                memberTotal.balance > 0
+                  ? "+"
+                  : memberTotal.balance < 0
+                    ? "−"
+                    : "";
+
+              return (
+                <article
+                  className={`${styles.settlementMemberRow} ${
+                    isCurrentMember ? styles.currentSettlementRow : ""
+                  }`}
+                  key={member.id}
+                >
+                  <div className={styles.settlementMemberIdentity}>
+                    <span
+                      className={`${styles.detailAvatar} ${
+                        isCaptain ? styles.captainDetailAvatar : ""
+                      } ${
+                        isCurrentMember ? styles.currentDetailAvatar : ""
+                      }`}
+                      aria-hidden="true"
+                    >
+                      {member.nickname.slice(0, 2)}
+                    </span>
+                    <span>
+                      <strong>{member.nickname}</strong>
+                      <small>
+                        {isCaptain ? "총대" : "참여자"}
+                        {isCurrentMember ? " · 나" : ""}
+                      </small>
+                    </span>
+                  </div>
+
+                  <dl className={styles.settlementNumbers}>
+                    <div>
+                      <dt>결제</dt>
+                      <dd>{formatWon(memberTotal.paidAmount)}</dd>
+                    </div>
+                    <div>
+                      <dt>부담</dt>
+                      <dd>{formatWon(memberTotal.owedAmount)}</dd>
+                    </div>
+                  </dl>
+
+                  <div
+                    className={`${styles.settlementBalance} ${
+                      styles[`${balanceType}Balance`]
+                    }`}
+                  >
+                    <span>{balanceLabel}</span>
+                    <strong>
+                      {balancePrefix}
+                      {formatWon(Math.abs(memberTotal.balance))}
+                    </strong>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <p className={styles.emptySettlement}>
+            영수증을 추가하면 사람별 금액이 여기에 계산돼요.
+          </p>
+        )}
+
+        <p className={styles.settlementNote}>
+          각 메뉴에서 선택한 사람을 기준으로 계산했어요.
+        </p>
       </section>
     </>
   );

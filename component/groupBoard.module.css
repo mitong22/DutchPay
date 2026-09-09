@@ -219,6 +219,8 @@
 .backButton,
 .secondaryButton,
 .closeButton,
+.deleteButton,
+.confirmDeleteButton,
 .methodTabs button {
   border: 0;
   border-radius: 10px;
@@ -230,6 +232,40 @@
   padding: 9px 12px;
   color: var(--primary-dark);
   background: #edf0ff;
+}
+
+.detailToolbar,
+.detailActions,
+.deleteConfirmation,
+.deleteConfirmationActions {
+  display: flex;
+  align-items: center;
+}
+
+.detailToolbar {
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.detailActions,
+.deleteConfirmationActions {
+  gap: 9px;
+}
+
+.deleteButton,
+.confirmDeleteButton {
+  min-height: 44px;
+  padding: 0 16px;
+}
+
+.deleteButton {
+  color: #a63d4c;
+  background: #fff0f2;
+}
+
+.confirmDeleteButton {
+  color: #ffffff;
+  background: #b64555;
 }
 
 .detailView {
@@ -289,6 +325,22 @@
   font-size: 0.9rem;
 }
 
+.deleteConfirmation {
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 24px;
+  padding: 18px;
+  border: 1px solid #f1c7ce;
+  border-radius: 14px;
+  background: #fff6f7;
+}
+
+.deleteConfirmation p {
+  margin: 5px 0 0;
+  color: #80636a;
+  font-size: 0.86rem;
+}
+
 .dialogBackdrop {
   position: fixed;
   z-index: 10;
@@ -307,6 +359,15 @@
   border-radius: 18px;
   background: var(--surface);
   box-shadow: 0 24px 70px rgba(25, 33, 61, 0.2);
+}
+
+.detailEditor {
+  width: 100%;
+  max-height: none;
+  overflow: visible;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  box-shadow: none;
 }
 
 .closeButton {
@@ -608,6 +669,14 @@
   background: #f7f8fc;
 }
 
+.deleteButton:hover {
+  background: #ffe3e7;
+}
+
+.confirmDeleteButton:hover {
+  background: #993746;
+}
+
 .dialogActions {
   display: flex;
   gap: 10px;
@@ -619,6 +688,8 @@
 .backButton:focus-visible,
 .secondaryButton:focus-visible,
 .closeButton:focus-visible,
+.deleteButton:focus-visible,
+.confirmDeleteButton:focus-visible,
 .methodTabs button:focus-visible,
 .removeMenuButton:focus-visible,
 .addMenuButton:focus-visible,
@@ -661,6 +732,18 @@
     flex-direction: column;
   }
 
+  .detailToolbar,
+  .deleteConfirmation {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .detailActions,
+  .deleteConfirmationActions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .receiptSummary {
     grid-template-columns: 1fr;
   }
@@ -677,6 +760,10 @@
   .dialog {
     max-height: calc(100vh - 24px);
     padding: 22px 18px;
+  }
+
+  .dialog.detailEditor {
+    max-height: none;
   }
 
   .menuFieldGrid {

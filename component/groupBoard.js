@@ -71,29 +71,58 @@ function createId(prefix) {
   return `${prefix}-${value}`;
 }
 
-function createMenuDraft(memberIds) {
+function createMenuDraft(memberIds, sourceItem = null) {
+  const quantity = Number(sourceItem?.quantity ?? 1);
+  const lineTotal = Number(sourceItem?.line_total ?? sourceItem?.amount);
+  const unitPrice =
+    sourceItem?.unit_price ??
+    (Number.isFinite(lineTotal) && quantity > 0 ? lineTotal / quantity : "");
+
   return {
-    id: createId("menu-draft"),
-    name: "",
-    quantity: "1",
-    amount: "",
-    consumer_member_ids: [...memberIds],
+    id: sourceItem?.id ?? createId("menu-draft"),
+    name: sourceItem?.name ?? sourceItem?.menu_name ?? "",
+    quantity: String(quantity),
+    amount: String(unitPrice),
+    consumer_member_ids: sourceItem?.consumer_member_ids
+      ? [...sourceItem.consumer_member_ids]
+      : [...memberIds],
   };
 }
 
-function appendReceipt(groupId, receipt) {
+function writeReceipts(groupId, receipts) {
   try {
-    const currentReceipts = parseReceipts(getReceiptsSnapshot(groupId));
-
     window.localStorage.setItem(
       getReceiptStoreKey(groupId),
-      JSON.stringify([...currentReceipts, receipt]),
+      JSON.stringify(receipts),
     );
     window.dispatchEvent(new Event(RECEIPT_STORE_EVENT));
     return true;
   } catch {
     return false;
   }
+}
+
+function appendReceipt(groupId, receipt) {
+  const currentReceipts = parseReceipts(getReceiptsSnapshot(groupId));
+  return writeReceipts(groupId, [...currentReceipts, receipt]);
+}
+
+function replaceReceipt(groupId, receipt) {
+  const currentReceipts = parseReceipts(getReceiptsSnapshot(groupId));
+  const nextReceipts = currentReceipts.map((currentReceipt) =>
+    currentReceipt.id === receipt.id ? receipt : currentReceipt,
+  );
+
+  return writeReceipts(groupId, nextReceipts);
+}
+
+function removeReceipt(groupId, receiptId) {
+  const currentReceipts = parseReceipts(getReceiptsSnapshot(groupId));
+  const nextReceipts = currentReceipts.filter(
+    (receipt) => receipt.id !== receiptId,
+  );
+
+  return writeReceipts(groupId, nextReceipts);
 }
 
 function formatWon(amount) {
@@ -110,16 +139,29 @@ function getMemberNames(group, memberIds = []) {
     .filter(Boolean);
 }
 
-function ReceiptEntryDialog({ currentMemberId, group, onClose, onSave }) {
+function ReceiptEntryDialog({
+  currentMemberId,
+  group,
+  initialReceipt = null,
+  onClose,
+  onSave,
+}) {
+  const isEditing = Boolean(initialReceipt);
   const [selectedMethod, setSelectedMethod] = useState("manual");
-  const initialMemberIds = group.members.map((member) => member.id);
-  const [title, setTitle] = useState("");
+  const defaultMemberIds = group.members.map((member) => member.id);
+  const initialMemberIds =
+    initialReceipt?.participant_member_ids ?? defaultMemberIds;
+  const [title, setTitle] = useState(initialReceipt?.title ?? "");
   const [participantMemberIds, setParticipantMemberIds] = useState(
     () => initialMemberIds,
   );
-  const [items, setItems] = useState(() => [
-    createMenuDraft(initialMemberIds),
-  ]);
+  const [items, setItems] = useState(() =>
+    initialReceipt?.items?.length
+      ? initialReceipt.items.map((item) =>
+          createMenuDraft(initialMemberIds, item),
+        )
+      : [createMenuDraft(initialMemberIds)],
+  );
   const [validationMessage, setValidationMessage] = useState("");
   const selectedDescription = RECEIPT_METHODS.find(
     (method) => method.id === selectedMethod,
@@ -259,7 +301,9 @@ function ReceiptEntryDialog({ currentMemberId, group, onClose, onSave }) {
       }
 
       normalizedItems.push({
-        id: createId("menu"),
+        id: String(item.id).startsWith("menu-draft-")
+          ? createId("menu")
+          : item.id,
         name,
         menu_name: name,
         quantity,
@@ -272,7 +316,8 @@ function ReceiptEntryDialog({ currentMemberId, group, onClose, onSave }) {
 
     const savedAt = new Date().toISOString();
     const receipt = {
-      id: createId("receipt"),
+      ...(initialReceipt ?? {}),
+      id: initialReceipt?.id ?? createId("receipt"),
       group_id: group.id,
       title: normalizedTitle,
       store_name: normalizedTitle,
@@ -284,11 +329,11 @@ function ReceiptEntryDialog({ currentMemberId, group, onClose, onSave }) {
       uploaded_by_member_id: currentMemberId,
       participant_member_ids: participantMemberIds,
       items: normalizedItems,
-      image_key: null,
-      input_method: "MANUAL",
-      ocr_status: "NONE",
-      status: "ACTIVE",
-      created_at: savedAt,
+      image_key: initialReceipt?.image_key ?? null,
+      input_method: initialReceipt?.input_method ?? "MANUAL",
+      ocr_status: initialReceipt?.ocr_status ?? "NONE",
+      status: initialReceipt?.status ?? "ACTIVE",
+      created_at: initialReceipt?.created_at ?? savedAt,
       updated_at: savedAt,
     };
 
@@ -297,51 +342,64 @@ function ReceiptEntryDialog({ currentMemberId, group, onClose, onSave }) {
     }
   }
 
-  return (
-    <div className={styles.dialogBackdrop}>
-      <section
-        className={styles.dialog}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="receipt-entry-title"
-      >
+  const editor = (
+    <section
+      className={`${styles.dialog} ${isEditing ? styles.detailEditor : ""}`}
+      role={isEditing ? undefined : "dialog"}
+      aria-modal={isEditing ? undefined : "true"}
+      aria-labelledby="receipt-entry-title"
+    >
         <div className={styles.dialogHeading}>
           <div>
-            <p className={styles.eyebrow}>영수증 추가</p>
-            <h2 id="receipt-entry-title">등록 방식을 선택해 주세요</h2>
+            <p className={styles.eyebrow}>
+              {isEditing ? "영수증 수정" : "영수증 추가"}
+            </p>
+            <h2 id="receipt-entry-title">
+              {isEditing
+                ? "내용을 확인하고 수정해 주세요"
+                : "등록 방식을 선택해 주세요"}
+            </h2>
           </div>
           <button
             className={styles.closeButton}
             type="button"
-            aria-label="영수증 추가 닫기"
+            aria-label={isEditing ? "영수증 수정 취소" : "영수증 추가 닫기"}
             onClick={onClose}
           >
             ×
           </button>
         </div>
 
-        <div className={styles.methodTabs} role="tablist" aria-label="등록 방식">
-          {RECEIPT_METHODS.map((method) => (
-            <button
-              className={
-                selectedMethod === method.id ? styles.selectedMethod : ""
-              }
-              type="button"
-              role="tab"
-              aria-selected={selectedMethod === method.id}
-              key={method.id}
-              onClick={() => selectMethod(method.id)}
+        {!isEditing && (
+          <>
+            <div
+              className={styles.methodTabs}
+              role="tablist"
+              aria-label="등록 방식"
             >
-              {method.label}
-            </button>
-          ))}
-        </div>
+              {RECEIPT_METHODS.map((method) => (
+                <button
+                  className={
+                    selectedMethod === method.id ? styles.selectedMethod : ""
+                  }
+                  type="button"
+                  role="tab"
+                  aria-selected={selectedMethod === method.id}
+                  key={method.id}
+                  onClick={() => selectMethod(method.id)}
+                >
+                  {method.label}
+                </button>
+              ))}
+            </div>
 
-        <p className={styles.methodDescription} role="tabpanel">
-          {selectedDescription}
-        </p>
+            <p className={styles.methodDescription} role="tabpanel">
+              {selectedDescription}
+            </p>
+          </>
+        )}
 
-        {selectedMethod === "manual" ? (
+        {isEditing || selectedMethod === "manual" ? (
           <form className={styles.manualForm} onSubmit={handleSubmit}>
             <label className={styles.formField}>
               <span>영수증 소제목</span>
@@ -516,10 +574,10 @@ function ReceiptEntryDialog({ currentMemberId, group, onClose, onSave }) {
                 type="button"
                 onClick={onClose}
               >
-                취소
+                {isEditing ? "수정 취소" : "취소"}
               </button>
               <button className={styles.primaryButton} type="submit">
-                영수증 저장
+                {isEditing ? "변경사항 저장" : "영수증 저장"}
               </button>
             </div>
           </form>
@@ -535,8 +593,13 @@ function ReceiptEntryDialog({ currentMemberId, group, onClose, onSave }) {
             </button>
           </div>
         )}
-      </section>
-    </div>
+    </section>
+  );
+
+  return isEditing ? (
+    editor
+  ) : (
+    <div className={styles.dialogBackdrop}>{editor}</div>
   );
 }
 
@@ -640,18 +703,78 @@ function ReceiptList({ currentMemberId, group, receipts, onAdd, onSelect }) {
   );
 }
 
-function ReceiptDetail({ group, receipt, onBack }) {
+function ReceiptDetail({
+  currentMemberId,
+  group,
+  receipt,
+  onBack,
+  onDelete,
+  onUpdate,
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [isDeleteConfirming, setIsDeleteConfirming] = useState(false);
+  const [actionMessage, setActionMessage] = useState("");
   const payer = findMember(group, receipt.paid_by_member_id);
   const participantNames = getMemberNames(
     group,
     receipt.participant_member_ids,
   );
 
+  if (isEditing) {
+    return (
+      <ReceiptEntryDialog
+        currentMemberId={currentMemberId}
+        group={group}
+        initialReceipt={receipt}
+        onClose={() => setIsEditing(false)}
+        onSave={(updatedReceipt) => {
+          const isSaved = onUpdate(updatedReceipt);
+
+          if (isSaved) {
+            setIsEditing(false);
+          }
+
+          return isSaved;
+        }}
+      />
+    );
+  }
+
+  function handleDelete() {
+    if (!onDelete(receipt.id)) {
+      setActionMessage("영수증을 삭제하지 못했어요. 다시 시도해 주세요.");
+    }
+  }
+
   return (
     <section className={styles.detailView} aria-labelledby="receipt-detail-title">
-      <button className={styles.backButton} type="button" onClick={onBack}>
-        ← 영수증 목록
-      </button>
+      <div className={styles.detailToolbar}>
+        <button className={styles.backButton} type="button" onClick={onBack}>
+          ← 영수증 목록
+        </button>
+        <div className={styles.detailActions}>
+          <button
+            className={styles.secondaryButton}
+            type="button"
+            onClick={() => {
+              setActionMessage("");
+              setIsEditing(true);
+            }}
+          >
+            수정하기
+          </button>
+          <button
+            className={styles.deleteButton}
+            type="button"
+            onClick={() => {
+              setActionMessage("");
+              setIsDeleteConfirming(true);
+            }}
+          >
+            삭제
+          </button>
+        </div>
+      </div>
 
       <div className={styles.detailHeading}>
         <div>
@@ -698,6 +821,37 @@ function ReceiptDetail({ group, receipt, onBack }) {
           );
         })}
       </div>
+
+      {isDeleteConfirming && (
+        <div className={styles.deleteConfirmation} role="alert">
+          <div>
+            <strong>이 영수증을 삭제할까요?</strong>
+            <p>삭제하면 현재 모임의 영수증 목록에서 사라져요.</p>
+          </div>
+          <div className={styles.deleteConfirmationActions}>
+            <button
+              className={styles.secondaryButton}
+              type="button"
+              onClick={() => setIsDeleteConfirming(false)}
+            >
+              취소
+            </button>
+            <button
+              className={styles.confirmDeleteButton}
+              type="button"
+              onClick={handleDelete}
+            >
+              삭제하기
+            </button>
+          </div>
+        </div>
+      )}
+
+      {actionMessage && (
+        <p className={styles.validationMessage} role="alert">
+          {actionMessage}
+        </p>
+      )}
     </section>
   );
 }
@@ -723,9 +877,20 @@ export default function GroupBoard({ currentMemberId, group }) {
     <main className={styles.boardMain}>
       {selectedReceipt ? (
         <ReceiptDetail
+          currentMemberId={currentMemberId}
           group={group}
           receipt={selectedReceipt}
           onBack={() => setSelectedReceiptId(null)}
+          onDelete={(receiptId) => {
+            const isRemoved = removeReceipt(group.id, receiptId);
+
+            if (isRemoved) {
+              setSelectedReceiptId(null);
+            }
+
+            return isRemoved;
+          }}
+          onUpdate={(receipt) => replaceReceipt(group.id, receipt)}
         />
       ) : (
         <ReceiptList

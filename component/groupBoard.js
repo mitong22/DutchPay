@@ -136,7 +136,7 @@ function ReceiptEntryDialog({ onClose }) {
   );
 }
 
-function ReceiptList({ group, receipts, onAdd, onSelect }) {
+function ReceiptList({ currentMemberId, group, receipts, onAdd, onSelect }) {
   const orderedMembers = [
     ...group.members.filter((member) => member.member_type === "registered"),
     ...group.members.filter((member) => member.member_type !== "registered"),
@@ -155,22 +155,35 @@ function ReceiptList({ group, receipts, onAdd, onSelect }) {
 
       <section className={styles.memberStrip} aria-label="현재 모임 멤버">
         <div className={styles.memberList}>
-          {orderedMembers.map((member) => (
-            <span className={styles.member} key={member.id}>
-              {member.member_type === "registered" && (
-                <span className={styles.captainBadge}>총대</span>
-              )}
+          {orderedMembers.map((member) => {
+            const isCaptain = member.member_type === "registered";
+            const isCurrentMember = member.id === currentMemberId;
+
+            return (
               <span
-                className={styles.memberAvatar}
-                title={member.nickname}
-                aria-label={`${member.nickname}${
-                  member.member_type === "registered" ? " 총대" : ""
+                className={`${styles.member} ${
+                  isCaptain ? styles.captainMember : ""
                 }`}
+                key={member.id}
               >
-                {member.nickname.slice(0, 2)}
+                {isCaptain && (
+                  <span className={styles.captainBadge}>총대</span>
+                )}
+                <span
+                  className={`${styles.memberAvatar} ${
+                    isCurrentMember ? styles.currentMemberAvatar : ""
+                  }`}
+                  title={member.nickname}
+                  aria-current={isCurrentMember ? "true" : undefined}
+                  aria-label={`${member.nickname}${
+                    isCaptain ? " 총대" : ""
+                  }${isCurrentMember ? " 현재 사용자" : ""}`}
+                >
+                  {member.nickname.slice(0, 2)}
+                </span>
               </span>
-            </span>
-          ))}
+            );
+          })}
         </div>
         <p>총 {group.members.length}명</p>
       </section>
@@ -282,7 +295,7 @@ function ReceiptDetail({ group, receipt, onBack }) {
   );
 }
 
-export default function GroupBoard({ group }) {
+export default function GroupBoard({ currentMemberId, group }) {
   const [isReceiptDialogOpen, setIsReceiptDialogOpen] = useState(false);
   const [selectedReceiptId, setSelectedReceiptId] = useState(null);
   const readReceiptSnapshot = useCallback(
@@ -309,6 +322,7 @@ export default function GroupBoard({ group }) {
         />
       ) : (
         <ReceiptList
+          currentMemberId={currentMemberId}
           group={group}
           receipts={receipts}
           onAdd={() => setIsReceiptDialogOpen(true)}

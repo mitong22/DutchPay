@@ -553,7 +553,7 @@ export default function ModeSelector({ captain }) {
       </header>
 
       {showCompleted ? (
-        <GroupBoard group={activeGroup} />
+        <GroupBoard group={activeGroup} currentMemberId={captain.id} />
       ) : (
         <main className={styles.main}>
           <Stepper currentStep={draft.step} />

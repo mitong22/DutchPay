@@ -138,7 +138,11 @@ STEP 3
 
 혼자하기에서는 모임 생성자가 모든 영수증을 등록하고 관리한다.
 
-기본적으로 모든 영수증의 실제 결제자는 모임 생성자이다.
+`SOLO` 모임은 초대나 대기 과정 없이 생성과 동시에 `status: "ACTIVE"`로 저장한다.
+
+`expected_member_count`에는 총대를 포함하여 생성된 전체 `group_member` 수를 저장하고, `activated_at`에는 생성 시각을 기록한다.
+
+모든 영수증의 실제 결제자인 `paid_by_member_id`는 반드시 총대와 연결된 `group_member._id`여야 하며 서버에서 이를 검증한다.
 
 
 ### 3. 함께하기
@@ -197,6 +201,12 @@ ACTIVE
 ```
 
 `ACTIVE` 상태가 된 이후부터 영수증 등록 및 정산 기능을 사용할 수 있다.
+
+`TOGETHER` 모임은 생성할 때 `status: "WAITING"`과 총대를 포함한 `expected_member_count`를 저장한다.
+
+현재 참여 인원은 별도 숫자 필드로 중복 저장하지 않고 `group_member.group_id`를 기준으로 계산한다.
+
+계산된 참여 인원이 `expected_member_count`와 같아지는 순간 `status`를 `ACTIVE`로 바꾸고 `activated_at`을 기록한다.
 
 
 ### 4. 영수증별 참여자
@@ -333,6 +343,20 @@ OCR / 이미지 분석
 메뉴 금액 / 메뉴 참여자 수
 ```
 
+원 단위로 정확히 나누어지지 않는 경우에는 정수 몫을 먼저 모두에게 배분하고, 남은 금액을 `consumer_member_ids[]`의 저장 순서대로 1원씩 추가 배분한다.
+
+예:
+
+```text
+10,000원 / 3명
+
+첫 번째 멤버  3,334원
+두 번째 멤버  3,333원
+세 번째 멤버  3,333원
+```
+
+각 메뉴의 분담액 합계는 반드시 원래 메뉴 금액과 같아야 한다.
+
 각 사람이 참여한 모든 메뉴의 부담 금액을 합산하여 해당 사람의 실제 부담 금액을 계산한다.
 
 이후 각 참여자별로 다음 값을 계산한다.
@@ -369,7 +393,19 @@ OCR / 이미지 분석
 
 모임 안의 모든 영수증과 메뉴를 계산한 뒤 참여자별 최종 채권과 채무를 계산한다.
 
-불필요한 중간 송금은 가능한 경우 상계한다.
+계산 순서는 다음과 같다.
+
+```text
+1. 메뉴별 개인 부담 금액 계산
+2. 참여자별 실제 결제 금액 합산
+3. 참여자별 실제 부담 금액 합산
+4. 최종 잔액 계산
+5. 채무자와 채권자 분리
+6. 결정적인 greedy 방식으로 순서대로 매칭
+7. 최종 송금 관계 생성
+```
+
+DB의 반환 순서에 의존하지 않도록 채무자와 채권자는 각각 `group_member._id` 오름차순으로 정렬한 뒤 매칭한다.
 
 예:
 
@@ -378,13 +414,23 @@ A → B 10,000원
 B → C 10,000원
 ```
 
-B의 최종 잔액이 0이라면 다음과 같이 정리한다.
+B의 최종 잔액이 0이라면 다음과 같이 상계한다.
 
 ```text
 A → C 10,000원
 ```
 
-최종 화면에는 실제 필요한 송금 관계를 보여준다.
+영수증 결제자의 자기 부담분은 잔액 계산에만 반영한다.
+
+```text
+from_member_id === to_member_id
+```
+
+인 자기 송금 문서는 생성하지 않는다.
+
+최종 화면에 필요한 송금 관계만 `settlement_transfer`에 저장한다.
+
+각 문서에는 확정된 `amount`와 계산 당시의 `calculation_version`을 함께 저장하여, 이후 영수증이 바뀌어도 과거 완료 기록의 금액 의미가 달라지지 않게 한다.
 
 
 ## 로그인 데이터는
@@ -441,18 +487,22 @@ member_type: guest
 
 함께하기에서 카카오톡으로 초대받은 참여자도 Better Auth 로그인이나 회원가입을 하지 않는다.
 
-카카오톡은 초대 링크를 전달하는 수단으로 사용한다.
+카카오톡은 초대 링크를 전달하는 수단으로만 사용한다.
 
-초대받은 참여자는 다음 방식으로 모임에 접근한다.
+총대가 아닌 참여 자리마다 고유한 Invite Token을 하나씩 만든다.
+
+초대 생성 시 `invite.member_id`는 `null`이고 `status`는 `"PENDING"`이다.
+
+최초 참여 흐름은 다음과 같다.
 
 ```text
 총대 Better Auth 로그인
 ↓
-함께하기 모임 생성
+TOGETHER 모임 생성
 ↓
 참여 예정 인원 설정
 ↓
-Invite Token 생성
+참여 자리별 Invite Token 생성
 ↓
 카카오톡으로 초대 링크 전달
 ↓
@@ -460,7 +510,13 @@ Invite Token 생성
 ↓
 서버에서 Invite Token 검증
 ↓
-group_member 생성 또는 기존 Member 확인
+PENDING Invite 조건부 선점
+↓
+group_member 생성
+↓
+invite.member_id 연결
+↓
+invite.status = CLAIMED
 ↓
 Guest Session Token 생성
 ↓
@@ -472,6 +528,18 @@ Guest Session Token을 HttpOnly Cookie로 전달
 ↓
 현재 group_id / member_id 확인
 ```
+
+마지막 참여 자리에 여러 요청이 동시에 접근해도 인원을 초과하지 않도록 다음 작업은 MongoDB 트랜잭션 하나에서 처리한다.
+
+- `status: "PENDING"`인 Invite의 조건부 선점
+- 현재 `group_member` 수와 `expected_member_count` 확인
+- `group_member` 생성
+- `invite.member_id` 연결과 `status: "CLAIMED"` 변경
+- 마지막 참여자라면 `expense_group.status`를 `ACTIVE`로 변경
+
+조건을 만족하지 못한 동시 요청은 실패 처리하며 새 멤버를 만들지 않는다.
+
+Cookie 삭제 후 같은 초대 링크로 재접속했을 때는 `invite.member_id`로 기존 `group_member`를 확인하고 새로운 Guest Session만 발급한다.
 
 
 ### 4. Invite Token
@@ -490,10 +558,13 @@ Invite Token은 해당 사용자가 특정 모임에 들어올 수 있는 자격
 - 어떤 모임의 초대인지
 - 만료된 초대인지
 - 취소된 초대인지
+- 이미 연결된 멤버가 있는지
 
-Invite Token 원문은 DB에 그대로 저장하지 않고 해시값으로 저장하는 구조를 사용한다.
+Invite Token은 충분히 긴 암호학적 난수로 생성한다.
 
-개념적인 데이터 구조는 다음과 같다.
+Token 원문은 URL을 통해 사용자에게 한 번 전달하고, DB에는 SHA-256 등의 해시값만 저장한다.
+
+데이터 구조는 다음과 같다.
 
 ```text
 invite
@@ -504,10 +575,21 @@ member_id
 token_hash
 status
 expires_at
+claimed_at
 created_at
 ```
 
-Invite Token은 Guest Session 발급 및 필요한 경우 재발급을 위한 기준으로 사용한다.
+`status`는 다음 값만 사용한다.
+
+```text
+PENDING
+CLAIMED
+REVOKED
+```
+
+만료 여부는 별도 상태값을 만들지 않고 `expires_at`으로 판단한다.
+
+`CLAIMED` Invite는 `member_id`에 연결된 기존 참여자의 Guest Session 재발급 기준으로 사용할 수 있다.
 
 
 ### 5. Guest Session
@@ -516,7 +598,7 @@ Invite Token 검증이 완료되면 초대 참여자의 Guest Session을 생성�
 
 Guest Session은 Better Auth의 `session`과 별도로 관리한다.
 
-개념적인 구조는 다음과 같다.
+데이터 구조는 다음과 같다.
 
 ```text
 guest_session
@@ -527,11 +609,14 @@ member_id
 token_hash
 expires_at
 created_at
+last_accessed_at
 ```
 
-Guest Session Token은 랜덤한 토큰을 사용한다.
+Guest Session Token은 충분히 긴 암호학적 난수로 생성한다.
 
-브라우저에는 Guest Session Token을 저장하고 서버에서는 해당 Token을 이용하여 MongoDB의 Guest Session 데이터를 조회한다.
+브라우저에는 Token 원문을 HttpOnly Cookie로 전달하고, DB에는 SHA-256 등의 해시값만 저장한다.
+
+`expires_at`에는 TTL 인덱스를 적용하여 만료된 세션이 계속 누적되지 않게 한다.
 
 Cookie 안에 다음 정보를 직접 저장해서 신뢰하지 않는다.
 
@@ -641,10 +726,18 @@ group_member
 
 정산 기능 내부에서는 로그인 방식에 관계없이 최종적으로 `group_member`를 기준으로 참여자를 처리한다.
 
+모든 서버 기능은 `getCurrentGroupMember()` 형태의 공통 함수를 통해 Better Auth Session 또는 Guest Session을 현재 `group_member` 정보로 변환한다.
+
+각 요청에서는 변환된 `group_id`와 `member_id`가 조회·수정 대상 데이터의 `group_id`와 일치하는지 다시 검증한다.
+
 
 ## 랜딩 페이지는
 
 랜딩 페이지는 서비스에 처음 접속했을 때 보여주는 화면이다.
+
+루트 경로 `/`에는 로그인과 모임 생성 Stepper를 표시한다.
+
+현재 개발용 사용자·DB 연결 확인 화면은 루트에서 분리하여 개발 환경에서만 접근 가능한 별도 Route에 둔다.
 
 총대는 Better Auth를 이용하여 로그인한다.
 
@@ -985,7 +1078,13 @@ OCR / 이미지 분석
 
 ### 8. 영수증 수정
 
-다음 항목을 수정할 수 있다.
+일반 `TOGETHER` 참여자는 자신이 등록한 영수증만 수정하거나 삭제할 수 있다.
+
+총대는 현재 모임의 모든 영수증을 관리할 수 있다.
+
+`SOLO`에서는 총대만 영수증을 관리한다.
+
+권한을 확인한 뒤 다음 항목을 수정할 수 있다.
 
 - 영수증 소제목
 - 실제 결제자
@@ -996,7 +1095,13 @@ OCR / 이미지 분석
 - 메뉴 삭제
 - 메뉴별 참여자
 
-영수증 또는 메뉴 정보가 변경되면 변경된 데이터를 기준으로 정산 결과도 다시 계산한다.
+영수증 또는 메뉴 정보가 변경되면 그룹의 `calculation_version`을 증가시킨다.
+
+이전 버전의 미완료 `settlement_transfer`는 무효화하고, 변경된 원본 데이터와 새 버전을 기준으로 최종 송금 관계를 다시 계산한다.
+
+정산 완료 전 영수증을 삭제하면 관련 미완료 정산 결과도 함께 제거한다.
+
+이미 정산이 완료된 뒤에는 원본 영수증을 물리적으로 삭제하지 않고 `status: "CANCELED"`로 변경하여 이력을 보존한다.
 
 
 ### 9. 정산 결과
@@ -1103,19 +1208,66 @@ PC와 모바일에서 모두 사용할 수 있는 반응형 UI로 구현한다.
 - 실제 송금 API
 - 실제 결제 API
 
-다음 사항은 아직 세부 정책이 확정되지 않았으므로 임의로 결정하지 않는다.
+다음 정책은 이 README의 기준을 그대로 따른다.
+
+- 모임 모드는 `SOLO`와 `TOGETHER`만 사용한다.
+- 모임 상태는 `WAITING`과 `ACTIVE`만 사용한다.
+- 영수증 참여자는 `receipts.participant_member_ids[]`에 저장한다.
+- 메뉴 참여자는 반드시 영수증 참여자의 부분집합이어야 한다.
+- 나누어지지 않는 원 단위는 `consumer_member_ids[]` 저장 순서대로 1원씩 배분한다.
+- 최종 송금은 `group_member._id` 기준으로 정렬한 결정적 greedy 상계 결과를 사용한다.
+- 메뉴별 결제 상태용 `payment` 컬렉션은 사용하지 않는다.
+- 실제 최종 송금 관계는 `settlement_transfer`에 금액과 계산 버전을 함께 저장한다.
+
+다음 항목의 구체적인 값이나 외부 서비스는 아직 확정되지 않았으므로 구현 전에 사용자에게 질문한다.
 
 - 실제 사용할 카카오톡 API의 구체적인 방식
 - Invite Token의 정확한 만료 기간
 - Guest Session의 정확한 만료 기간
 - Cookie의 정확한 유지 기간
-- OCR 서비스 선택
-- 금액이 정확히 나누어지지 않을 때의 원 단위 처리 정책
-- 송금 최소화 알고리즘의 세부 정책
+- OCR 서비스 및 객체 스토리지 선택
 
-위 항목이 구현 과정에서 필요해지면 임의로 결정하지 말고 사용자에게 먼저 질문한다.
+### 환경변수와 비밀정보
 
-요구사항에서 알 수 없는 데이터나 정책을 추측하여 구현하지 않는다.
+MongoDB 접속 URI와 인증 Secret을 소스 또는 README에 직접 적지 않는다.
+
+로컬 개발 값은 Git에서 제외되는 `.env.local`에만 저장한다.
+
+```dotenv
+MONGODB_URI=<새로 발급한 MongoDB URI>
+MONGODB_DB=dutchpay
+BETTER_AUTH_SECRET=<충분히 긴 랜덤 Secret>
+BETTER_AUTH_URL=http://localhost:3000
+```
+
+운영 환경에서는 `BETTER_AUTH_URL`을 실제 배포 URL로 설정한다.
+
+과거 Git 추적 README에 노출된 MongoDB 비밀번호는 문서에서 제거하는 것만으로 안전해지지 않으므로 Atlas에서 반드시 교체한다.
+
+### 페이지 기본 설정
+
+한국어 서비스에 맞춰 Root Layout과 metadata를 다음 기준으로 구현한다.
+
+- `<html lang="ko">`를 사용한다.
+- `<header>`를 `<body>` 내부에 둔다.
+- 페이지 제목은 `몫대로`로 설정한다.
+- 페이지 설명에는 메뉴별 참여자를 기준으로 정산하는 더치페이 서비스임을 적는다.
+- `/`에는 로그인과 모임 생성 Stepper를 둔다.
+- DB 연결 확인 화면은 개발 전용 Route로 분리한다.
+
+### 서버 검증과 권한
+
+클라이언트가 전달한 ID와 계산 결과를 그대로 신뢰하지 않는다.
+
+모든 조회·생성·수정·삭제 요청에서 `getCurrentGroupMember()`를 사용하고, 현재 세션의 `group_id`와 `member_id`를 대상 데이터와 비교한다.
+
+일반 `TOGETHER` 참여자는 자신이 등록한 영수증만 수정·삭제할 수 있고, 총대는 해당 그룹 전체 영수증을 관리할 수 있다.
+
+`SOLO`에서는 모든 영수증의 `paid_by_member_id`가 총대의 `group_member._id`인지 서버에서 강제한다.
+
+모임·멤버·영수증·메뉴·초대·정산 문서의 참조와 금액 정합성도 서버에서 검증한다.
+
+### 구현 전 설계 확인
 
 바로 코드를 수정하지 않는다.
 
@@ -1137,15 +1289,16 @@ PC와 모바일에서 모두 사용할 수 있는 반응형 UI로 구현한다.
 14. 서버에서 반드시 검증해야 하는 권한
 15. 전체 구현 순서
 
-설계 과정에서 요구사항이 모호하거나 선택지가 여러 개인 부분이 발견되면 임의로 판단하지 말고 질문한다.
+설계 과정에서 이 README로 확정되지 않은 요구사항이나 여러 선택지가 발견되면 질문한다.
 
 설계 내용을 먼저 보여주고 사용자의 승인을 받은 이후에 실제 코드 구현을 시작한다.
+
 
 ## 데이터베이스 구조는
 
 MongoDB Atlas의 `dutchpay` 데이터베이스를 사용한다.
 
-현재 데이터베이스는 다음 7개 컬렉션으로 구성되어 있다.
+데이터베이스는 다음 9개 컬렉션으로 구성한다.
 
 ```text
 user
@@ -1154,40 +1307,46 @@ session
 expense_group
 group_member
 receipts
-payment
+settlement_transfer
+invite
+guest_session
 ```
+
+기존의 메뉴별 참여자 상태용 `payment` 컬렉션은 사용하지 않는다.
 
 현재 영수증과 메뉴는 별도의 `expense_item` 컬렉션으로 분리하지 않는다.
 
-하나의 영수증을 `receipts` 문서 하나로 관리하고, 해당 영수증에 포함된 메뉴들은 `receipts.items[]` 배열에 Embedded Document 형태로 저장한다.
+하나의 영수증을 `receipts` 문서 하나로 관리하고, 해당 영수증에 포함된 메뉴는 `receipts.items[]` 배열에 Embedded Document 형태로 저장한다.
 
 전체적인 관계는 다음과 같다.
 
 ```text
+Better Auth
+
 user
  ├─ account
  └─ session
+
+
+더치페이
 
 user
  └─ expense_group
       │
       ├─ group_member
+      ├─ invite
+      ├─ guest_session
+      ├─ receipts
+      │    └─ items[]
+      │         └─ consumer_member_ids[]
+      │              ↓
+      │         group_member
       │
-      └─ receipts
-           │
-           └─ items[]
-                │
-                └─ consumer_member_ids[]
-                     ↓
-                group_member
-
-payment
- ├─ group_id
- ├─ receipt_id
- ├─ expense_item_id
- ├─ payer_member_id
- ├─ payee_member_id
- └─ status
+      └─ settlement_transfer
+           ├─ from_member_id
+           └─ to_member_id
+                ↓
+           group_member
 ```
 
 
@@ -1255,7 +1414,7 @@ userId
 
 이 `session`은 Better Auth 회원용 세션이다.
 
-카카오톡 초대를 통해 로그인 없이 들어오는 참여자가 사용하는 Guest Session과는 별개로 취급한다.
+카카오톡 초대를 통해 로그인 없이 들어오는 참여자가 사용하는 `guest_session`과는 별개로 취급한다.
 
 
 ### expense_group
@@ -1269,26 +1428,47 @@ _id
 name
 created_by
 mode
-member_ids[]
+status
+expected_member_count
+activated_at
+calculation_version
 created_at
+updated_at
 ```
 
 `_id`는 UUID 문자열을 사용한다.
 
 `created_by`는 해당 모임을 생성한 Better Auth 사용자의 `user._id`를 참조한다.
 
-`member_ids[]`에는 해당 모임에 속한 `group_member._id` 목록을 저장한다.
-
-현재 DB 정의서의 `mode` 값은 `shared`로 되어 있다.
-
-하지만 실제 서비스 요구사항에서는 다음 두 가지 모드가 필요하다.
+`mode`는 다음 값만 사용한다.
 
 ```text
 SOLO
 TOGETHER
 ```
 
-따라서 실제 구현 전에 `expense_group.mode`를 기존 `shared` 방식으로 유지할 것인지, `SOLO / TOGETHER` 방식으로 변경할 것인지 확정해야 한다.
+기존 `shared` 값은 사용하지 않는다.
+
+`status`는 다음 값만 사용한다.
+
+```text
+WAITING
+ACTIVE
+```
+
+`SOLO` 모임은 생성과 동시에 `ACTIVE`가 되며 `activated_at`에 생성 시각을 기록한다.
+
+`TOGETHER` 모임은 `WAITING`으로 생성하고, 실제 참여 인원이 `expected_member_count`에 도달하면 `ACTIVE`로 전환한다.
+
+`expected_member_count`는 총대를 포함한 전체 참여 예정 인원이다.
+
+현재 참여 인원은 `group_member.group_id`로 계산하며 `joined_member_count`를 별도 저장하지 않는다.
+
+멤버 관계도 `group_member.group_id`를 기준으로 조회하며 `expense_group.member_ids[]`를 중복 저장하지 않는다.
+
+`calculation_version`은 정산 원본의 버전이다.
+
+영수증 또는 메뉴가 생성·수정·삭제되면 값을 증가시키고, 같은 버전으로 생성한 `settlement_transfer`만 현재 정산 결과로 취급한다.
 
 
 ### group_member
@@ -1303,6 +1483,7 @@ group_id
 user_id
 nickname
 member_type
+created_at
 ```
 
 `_id`는 UUID 문자열을 사용한다.
@@ -1311,33 +1492,28 @@ member_type
 
 `user_id`는 Better Auth 사용자와 연결되는 경우 `user._id`를 저장하고, 비회원 참여자는 `null`이 될 수 있다.
 
-`member_type`은 다음 값을 사용한다.
+`member_type`은 다음 값만 사용한다.
 
 ```text
 registered
 guest
 ```
 
-총대는 Better Auth 사용자이므로 다음과 같이 연결된다.
+총대는 Better Auth 사용자이면서 동시에 다음과 같은 `group_member`이다.
 
 ```text
-user
-↓
-group_member
-
 user_id = user._id
 member_type = registered
 ```
 
-혼자하기에서 총대가 직접 추가한 참여자는 다음과 같이 사용할 수 있다.
+혼자하기에서 총대가 직접 추가한 참여자와 함께하기 초대로 들어온 비로그인 참여자는 다음과 같다.
 
 ```text
-nickname = "지현"
 user_id = null
 member_type = guest
 ```
 
-함께하기에서 카카오톡 초대를 통해 들어온 비로그인 사용자 역시 실제 정산에서는 `group_member`를 기준으로 처리한다.
+같은 Better Auth 사용자가 한 모임에서 중복 멤버가 되지 않도록 `user_id`가 `null`이 아닌 문서에만 `(group_id, user_id)` partial unique index를 적용한다.
 
 
 ### receipts
@@ -1353,7 +1529,15 @@ store_name
 total_amount
 paid_by_member_id
 uploaded_by_member_id
+participant_member_ids[]
 items[]
+image_key
+input_method
+ocr_status
+status
+canceled_at
+created_at
+updated_at
 ```
 
 각 필드의 역할은 다음과 같다.
@@ -1377,11 +1561,26 @@ paid_by_member_id
 uploaded_by_member_id
 → 이 영수증을 서비스에 등록한 사람
 
+participant_member_ids[]
+→ 이 영수증의 일정에 실제로 참여한 멤버
+
 items[]
 → 영수증에 포함된 메뉴 목록
+
+image_key
+→ 객체 스토리지에 저장한 영수증 이미지의 키 또는 null
+
+input_method
+→ 입력 방법
+
+ocr_status
+→ OCR 처리 상태
+
+status
+→ 영수증 사용 또는 취소 상태
 ```
 
-`paid_by_member_id`와 `uploaded_by_member_id`는 서로 다를 수 있다.
+`paid_by_member_id`와 `uploaded_by_member_id`는 `TOGETHER`에서 서로 다를 수 있다.
 
 예를 들어 지현이 실제 결제했고 미연이 대신 영수증을 등록했다면 다음과 같이 표현할 수 있다.
 
@@ -1392,6 +1591,36 @@ paid_by_member_id
 uploaded_by_member_id
 → 미연
 ```
+
+`SOLO`에서는 `paid_by_member_id`가 항상 총대와 연결된 `group_member._id`여야 한다.
+
+`input_method`는 다음 값만 사용한다.
+
+```text
+MANUAL
+CAMERA
+UPLOAD
+```
+
+`ocr_status`는 다음 값만 사용한다.
+
+```text
+NONE
+PENDING
+COMPLETED
+FAILED
+```
+
+실제 이미지 바이너리는 MongoDB 문서가 아니라 객체 스토리지에 저장한다.
+
+`status`는 다음 값만 사용한다.
+
+```text
+ACTIVE
+CANCELED
+```
+
+정산이 완료된 영수증은 물리적으로 삭제하지 않고 `CANCELED`로 변경하여 원본 이력을 보존한다.
 
 
 ### receipts.items[]
@@ -1437,91 +1666,62 @@ consumer_member_ids[]
 quantity * unit_price
 ```
 
-예:
 
-```text
-삼겹살
+### 영수증 참여자와 메뉴별 참여자
 
-quantity
-2
+영수증에 실제로 참여한 멤버는 `receipts.participant_member_ids[]`에 명시적으로 저장한다.
 
-unit_price
-15,000
-
-line_total
-30,000
-```
-
-
-### 메뉴별 참여자
-
-이 서비스의 핵심 기능 중 하나이다.
-
-같은 영수증에 포함된 메뉴라도 실제로 먹은 사람이 다를 수 있기 때문에 메뉴마다 `consumer_member_ids[]`를 별도로 저장한다.
+메뉴마다 실제 비용을 부담할 멤버는 `receipts.items[].consumer_member_ids[]`에 저장한다.
 
 예:
 
 ```text
 [1차 고깃집]
 
-삼겹살
-60,000원
-
-consumer_member_ids
+participant_member_ids
 → 미연
 → 지현
 → 수인
 
-
-소주
-20,000원
-
-consumer_member_ids
+삼겹살 consumer_member_ids
+→ 미연
 → 지현
 → 수인
 
+소주 consumer_member_ids
+→ 지현
+→ 수인
 
-콜라
-3,000원
-
-consumer_member_ids
+콜라 consumer_member_ids
 → 미연
 ```
 
-따라서 영수증 전체 금액을 영수증 참여자 수로 단순하게 나누지 않는다.
+모든 `items[].consumer_member_ids[]`는 `participant_member_ids[]`의 부분집합이어야 한다.
+
+메뉴별 참여자는 한 명 이상이어야 하고, 배열 안에서 같은 멤버를 중복 저장하지 않는다.
+
+클라이언트 선택 범위도 영수증 참여자로 제한하지만 최종 검증은 서버에서 수행한다.
+
+
+### 메뉴별 금액 계산
 
 각 메뉴의 `line_total`을 해당 메뉴의 `consumer_member_ids` 수로 나누어 개인별 부담 금액을 계산한다.
+
+정수 몫을 먼저 모두에게 배분하고 나머지는 `consumer_member_ids[]`의 저장 순서대로 1원씩 추가한다.
 
 예:
 
 ```text
-삼겹살
+10,000원 / 3명
 
-60,000 / 3
-= 20,000원씩
-
-
-소주
-
-20,000 / 2
-= 10,000원씩
-
-
-콜라
-
-3,000 / 1
-= 3,000원
+첫 번째 멤버  3,334원
+두 번째 멤버  3,333원
+세 번째 멤버  3,333원
 ```
 
-분담 금액 자체는 DB에 별도 저장하지 않고 원본 메뉴 데이터를 기준으로 계산한다.
+분담 금액은 원본 메뉴 데이터에서 계산하며 메뉴별 결과를 별도 필드로 중복 저장하지 않는다.
 
-기본 계산식은 다음과 같다.
-
-```text
-메뉴별 개인 부담금
-=
-items[].line_total / items[].consumer_member_ids.length
-```
+각 메뉴의 분담액 합계는 항상 `line_total`과 같아야 한다.
 
 
 ### 영수증 총 금액 검증
@@ -1534,374 +1734,317 @@ receipts.total_amount
 sum(receipts.items[].line_total)
 ```
 
-예:
-
-```text
-삼겹살 30,000
-소주    4,000
-콜라    2,000
-
-↓
-
-total_amount
-36,000
-```
-
 저장 및 수정 시 서버에서 금액 정합성을 검증한다.
 
 
 ### 참여자 정합성
 
-다음 참여자들은 반드시 해당 영수증의 `group_id`와 동일한 모임에 속한 `group_member`여야 한다.
+다음 참여자는 모두 영수증의 `group_id`와 동일한 모임에 속한 `group_member`여야 한다.
 
 ```text
 paid_by_member_id
 uploaded_by_member_id
+participant_member_ids[]
 items[].consumer_member_ids[]
 ```
 
-다른 모임의 `group_member` ID를 임의로 전달하여 영수증이나 메뉴에 포함할 수 없어야 한다.
+다른 모임의 `group_member` ID를 전달하여 영수증이나 메뉴에 포함할 수 없어야 한다.
 
-이 검증은 클라이언트의 값을 그대로 신뢰하지 않고 서버에서 다시 확인한다.
+모든 서버 요청은 현재 세션의 `group_id`와 `member_id`도 대상 문서와 비교한다.
 
 
-### payment
+### settlement_transfer
 
-`payment`는 최종 송금 결과를 한 건으로 저장하는 컬렉션이 아니라 **메뉴별 참여자의 정산 상태를 관리하는 컬렉션**이다.
+`settlement_transfer`는 메뉴별 상태가 아니라 모임 전체를 상계한 실제 최종 송금 관계를 저장한다.
 
 주요 필드는 다음과 같다.
 
 ```text
 _id
 group_id
-receipt_id
-expense_item_id
-payer_member_id
-payee_member_id
+from_member_id
+to_member_id
+amount
 status
+calculation_version
 created_at
+paid_at
 ```
 
 각 필드의 역할은 다음과 같다.
 
 ```text
-_id
-→ 정산 내역 ID
-
 group_id
 → 정산이 속한 모임
 
-receipt_id
-→ 정산 대상 영수증
-
-expense_item_id
-→ 정산 대상 메뉴
-
-payer_member_id
+from_member_id
 → 돈을 보내야 하는 참여자
 
-payee_member_id
+to_member_id
 → 돈을 받을 참여자
 
+amount
+→ 해당 버전에서 확정된 송금 금액
+
 status
-→ 결제 완료 여부
+→ 송금 진행 상태
+
+calculation_version
+→ 이 결과를 만든 그룹 정산 버전
+
+paid_at
+→ 송금 완료 시각 또는 null
 ```
 
-`status`는 다음 두 값을 사용한다.
+`status`는 다음 값만 사용한다.
 
 ```text
-paid
-unpaid
+PENDING
+PAID
+INVALIDATED
+```
+
+영수증 결제자의 자기 부담분은 잔액 계산에만 반영한다.
+
+`from_member_id`와 `to_member_id`가 같은 문서는 생성하지 않는다.
+
+`amount`는 0보다 큰 정수 원 단위 값이어야 한다.
+
+영수증 또는 메뉴가 바뀌면 그룹의 `calculation_version`을 증가시키고 이전 버전의 미완료 결과를 `INVALIDATED`로 변경한 뒤 새 결과를 생성한다.
+
+이미 `PAID`인 결과의 `amount`와 `calculation_version`은 과거 이력으로 보존한다.
+
+
+### 최종 송금 계산
+
+참여자별 최종 잔액은 다음과 같이 계산한다.
+
+```text
+최종 잔액
+=
+실제 결제한 총 금액 - 실제 부담해야 하는 총 금액
+```
+
+잔액이 음수인 참여자는 채무자, 양수인 참여자는 채권자이다.
+
+채무자와 채권자를 각각 `group_member._id` 오름차순으로 정렬한 뒤 앞에서부터 결정적인 greedy 방식으로 매칭한다.
+
+한쪽 잔액이 0이 되면 다음 참여자로 이동하고 모든 잔액이 0이 될 때까지 반복한다.
+
+이 과정으로 불필요한 중간 채무를 상계한다.
+
+```text
+A → B 10,000원
+B → C 10,000원
+
+최종 결과
+A → C 10,000원
 ```
 
 
-### payment와 메뉴의 관계
+### 영수증 변경과 정산 버전
 
-`expense_item` 컬렉션은 사용하지 않는다.
-
-`payment.expense_item_id`는 `receipts.items[]._id`를 논리적으로 참조한다.
-
-예:
+영수증 또는 메뉴를 생성·수정·삭제하면 같은 트랜잭션 또는 일관된 서버 절차에서 다음 순서로 처리한다.
 
 ```text
-receipts
+원본 영수증 변경
+↓
+expense_group.calculation_version 증가
+↓
+이전 PENDING settlement_transfer 무효화
+↓
+새 버전으로 부담액과 최종 잔액 계산
+↓
+새 settlement_transfer 생성
+```
 
+정산 완료 전 영수증 삭제 시 해당 원본으로 만든 미완료 결과를 함께 제거하거나 무효화한다.
+
+정산 완료 후에는 영수증을 물리적으로 삭제하지 않고 `CANCELED` 상태로 변경한다.
+
+
+### invite
+
+참여 자리마다 고유 Invite를 한 건 생성한다.
+
+주요 필드는 다음과 같다.
+
+```text
 _id
-RECEIPT_001
-
-items
- ├─ ITEM_001 삼겹살
- ├─ ITEM_002 소주
- └─ ITEM_003 콜라
-```
-
-삼겹살에 대한 정산 상태를 저장하는 경우 다음과 같이 연결한다.
-
-```text
-payment.receipt_id
-→ RECEIPT_001
-
-payment.expense_item_id
-→ ITEM_001
-```
-
-즉 다음과 같은 관계이다.
-
-```text
-receipts
- └─ items[]
-      └─ _id
-          ↑
-          │
-payment.expense_item_id
-```
-
-
-### 메뉴별 payment 생성
-
-현재 DB 정의 기준에서는 메뉴의 `consumer_member_ids[]`에 포함된 참여자별로 `payment` 문서를 생성한다.
-
-각 `payment`는 어떤 메뉴의 어떤 참여자가 정산을 완료했는지를 판단하는 용도로 사용한다.
-
-예:
-
-```text
-[삼겹살]
-
-consumer_member_ids
-
-미연
-지현
-수인
-```
-
-각 참여자의 메뉴 정산 상태를 `payment`에서 관리한다.
-
-```text
-ITEM_001 / 미연 / unpaid
-ITEM_001 / 지현 / paid
-ITEM_001 / 수인 / unpaid
-```
-
-`payment`에는 개인별 분담 금액을 별도로 저장하지 않는다.
-
-금액이 필요한 경우 다음 값을 기준으로 계산한다.
-
-```text
-receipts.items[].line_total
-/
-receipts.items[].consumer_member_ids.length
-```
-
-
-### payment의 참조 관계
-
-`payment`는 다음 데이터를 참조한다.
-
-```text
 group_id
-→ expense_group._id
-
-receipt_id
-→ receipts._id
-
-expense_item_id
-→ receipts.items[]._id
-
-payer_member_id
-→ group_member._id
-
-payee_member_id
-→ group_member._id
+member_id
+token_hash
+status
+expires_at
+claimed_at
+created_at
 ```
 
-`expense_item_id`는 MongoDB의 실제 FK가 아니라 Embedded Document의 `_id`를 애플리케이션에서 논리적으로 참조하는 구조이다.
+최초 생성 시 `member_id`는 `null`이고 `status`는 `PENDING`이다.
 
+최초 참여가 성공하면 생성된 `group_member._id`를 `member_id`에 연결하고 `status`를 `CLAIMED`로 변경한다.
 
-### 현재 MongoDB 관계 정리
+`status`는 다음 값만 사용한다.
 
 ```text
-Better Auth
-
-user
- ├─ account
- └─ session
-
-
-더치페이
-
-user
-  │
-  │ created_by
-  ↓
-expense_group
-  │
-  ├──────────────┐
-  │              │
-  ↓              ↓
-group_member   receipts
-                 │
-                 ↓
-               items[]
-                 │
-                 │ consumer_member_ids[]
-                 ↓
-            group_member
-
-
-receipts.items[]._id
-        ↑
-        │
-payment.expense_item_id
+PENDING
+CLAIMED
+REVOKED
 ```
+
+만료 여부는 `expires_at`으로 판단한다.
+
+Invite claim과 `group_member` 생성은 MongoDB 트랜잭션으로 처리하고, `PENDING` 상태인 문서만 조건부로 선점한다.
+
+이미 `CLAIMED`인 Invite로 재접속하면 `member_id`의 기존 멤버를 확인한 뒤 새 Guest Session만 발급한다.
+
+
+### guest_session
+
+비로그인 초대 참여자의 세션을 Better Auth `session`과 별도로 저장한다.
+
+주요 필드는 다음과 같다.
+
+```text
+_id
+group_id
+member_id
+token_hash
+expires_at
+created_at
+last_accessed_at
+```
+
+Token은 충분히 긴 암호학적 난수로 생성하고 원문은 DB에 저장하지 않는다.
+
+서버는 Cookie의 원문 Token을 동일한 방식으로 해시하여 `token_hash`로 세션을 찾는다.
+
+`expires_at`에는 TTL 인덱스를 적용한다.
+
+
+### 인증 통합과 접근 권한
+
+`getCurrentGroupMember()` 형태의 공통 서버 함수는 Better Auth `session` 또는 `guest_session`을 현재 `group_member` 정보로 변환한다.
+
+모든 API는 이 결과의 `group_id` 및 `member_id`와 대상 모임·영수증·메뉴·Invite·정산 문서의 `group_id`를 비교한다.
+
+권한 기준은 다음과 같다.
+
+- 총대는 자신이 만든 그룹의 모든 영수증을 관리할 수 있다.
+- 일반 `TOGETHER` 참여자는 자신이 등록한 영수증만 수정하거나 삭제할 수 있다.
+- `SOLO`에서는 총대만 영수증을 등록·수정·삭제할 수 있다.
+- `SOLO` 영수증의 결제자는 항상 총대의 `group_member`이다.
 
 
 ### 데이터베이스에서 계산값을 다루는 원칙
 
-가능한 경우 계산 결과를 중복 저장하지 않고 원본 데이터를 기준으로 계산한다.
+원본에서 다시 계산할 수 있는 중간 값은 가능한 한 중복 저장하지 않는다.
 
-다음 값은 원본 데이터에서 계산할 수 있다.
+다음 값은 영수증과 메뉴 원본에서 계산한다.
 
 ```text
 메뉴별 개인 부담 금액
 개인별 총 부담 금액
 개인별 실제 결제 금액
 개인별 최종 잔액
-최종 정산 관계
 ```
 
-특히 메뉴별 부담 금액은 별도 필드로 저장하지 않는다.
+실제로 송금해야 하는 최종 결과는 상태 추적과 과거 이력을 위해 `settlement_transfer`에 저장한다.
+
+이때 반드시 `amount`와 `calculation_version`을 함께 저장한다.
+
+
+### MongoDB validator
+
+MongoDB validator는 최소한 다음 내용을 보호한다.
+
+- 필수 필드 존재 여부
+- 문자열, 숫자, 날짜, 배열 등 기본 BSON 타입
+- `expense_group.mode`의 `SOLO | TOGETHER` enum
+- `expense_group.status`의 `WAITING | ACTIVE` enum
+- `invite.status`의 `PENDING | CLAIMED | REVOKED` enum
+- `receipts.input_method`의 `MANUAL | CAMERA | UPLOAD` enum
+- `receipts.ocr_status`의 `NONE | PENDING | COMPLETED | FAILED` enum
+- `settlement_transfer.status`의 `PENDING | PAID | INVALIDATED` enum
+- 금액과 인원수의 최소값
+
+컬렉션 간 참조, 메뉴 참여자의 부분집합 관계, 금액 합계, 모드별 권한과 같은 규칙은 서버 validation으로 다시 보호한다.
+
+
+### 인덱스
+
+주요 그룹별 조회를 위해 다음 보조 인덱스를 추가한다.
 
 ```text
-line_total
-/
-consumer_member_ids.length
-```
-
-를 기준으로 계산한다.
-
-영수증이나 메뉴가 수정되면 변경된 원본 데이터를 이용하여 정산 결과를 다시 계산한다.
-
-
-### 현재 DB 정의서 기준 인덱스 검토
-
-현재 각 컬렉션에는 기본 `_id` 인덱스가 존재하는 구조이다.
-
-실제 구현 시 다음 조회 필드에 대한 보조 인덱스를 검토한다.
-
-```text
+expense_group.created_by
+group_member.group_id
 receipts.group_id
-receipts.items._id
-
-payment.group_id
-payment.receipt_id
-payment.expense_item_id
+settlement_transfer.group_id
+invite.group_id
+guest_session.member_id
 ```
 
-Better Auth 관련해서는 사용하는 Better Auth 버전과 실제 Adapter 요구사항을 확인하여 다음 필드의 고유성 및 인덱스를 검토한다.
+중복을 DB에서 차단하기 위해 다음 고유 인덱스를 추가한다.
 
 ```text
 user.email
 session.token
+account(providerId, accountId)
+invite.token_hash
+guest_session.token_hash
 ```
 
+`group_member(group_id, user_id)`에는 `user_id`가 `null`이 아닌 문서만 대상으로 하는 partial unique index를 적용한다.
 
-### 현재 DB 정의와 서비스 기획 사이에서 추가로 필요한 부분
+`guest_session.expires_at`에는 TTL 인덱스를 적용한다.
 
-현재 MongoDB 정의서에는 다음 두 컬렉션이 존재하지 않는다.
+실제 Better Auth 컬렉션의 필드명과 인덱스 요구사항은 설치된 Better Auth Adapter 버전의 스키마와 맞춰 확인한다.
 
-```text
-invite
-guest_session
+
+### 환경변수와 보안
+
+`lib/db.js`가 요구하는 MongoDB 설정과 Better Auth 운영 설정은 환경변수로만 제공한다.
+
+```dotenv
+MONGODB_URI=<새로 발급한 MongoDB URI>
+MONGODB_DB=dutchpay
+BETTER_AUTH_SECRET=<충분히 긴 랜덤 Secret>
+BETTER_AUTH_URL=http://localhost:3000
 ```
 
-하지만 함께하기 모드에서 비로그인 참여자를 카카오톡으로 초대하고, Invite Token 검증 이후 HttpOnly Cookie를 이용하여 Guest Session을 유지하려면 별도의 데이터 저장 구조가 필요하다.
+`.env.local`은 Git에 포함하지 않는다.
 
-현재 기획상 인증 흐름은 다음과 같다.
+Git 추적 문서나 소스에 URI, 비밀번호, Secret, Token 원문을 기록하지 않는다.
 
-```text
-총대
-↓
-Better Auth 로그인
-↓
-함께하기 모임 생성
-↓
-Invite Token 생성
-↓
-카카오톡으로 초대 링크 전달
-↓
-초대받은 사용자가 링크 접속
-↓
-Invite Token 검증
-↓
-group_member 연결
-↓
-Guest Session Token 생성
-↓
-Guest Session DB 저장
-↓
-HttpOnly Cookie 발급
-↓
-이후 요청마다 Guest Session 확인
-```
-
-따라서 `invite`와 `guest_session`은 현재 DB에 이미 존재하는 컬렉션으로 취급하지 않는다.
-
-구현 전에 별도 컬렉션으로 추가할지 최종 정의가 필요하다.
+이미 노출된 MongoDB 비밀번호는 Atlas에서 교체한 뒤 새 URI만 로컬과 배포 환경변수에 등록한다.
 
 
-### 현재 정의서에서 확정되지 않은 영수증 참여자
+### 개발·테스트 Seed
 
-현재 `receipts`에는 다음과 같은 별도의 영수증 참여자 배열이 정의되어 있지 않다.
+현재 seed의 참조와 금액 정합성에는 문제가 없으므로 단일 영수증 N빵 기본 예시로 유지한다.
 
-```text
-participant_member_ids[]
-```
+기능 구현 후에는 다음 예시를 추가하여 검증 범위를 넓힌다.
 
-현재 정의되어 있는 것은 메뉴별 참여자인 다음 필드이다.
+1. 총대 1명과 guest 여러 명, 모든 결제자가 총대인 `SOLO ACTIVE`
+2. 목표 인원보다 참여자가 적고 `PENDING` Invite가 남은 `TOGETHER WAITING`
+3. 총대와 모든 guest가 참여한 `TOGETHER ACTIVE`
+4. 서로 다른 멤버가 결제한 영수증이 3개 이상인 최종 상계 예시
+5. 실제 결제자와 영수증 등록자가 다른 예시
+6. 영수증 참여자와 메뉴 소비자가 다른 예시
+7. 10,000원을 3명이 나누는 원 단위 나머지 예시
+8. `A → B`와 `B → C`가 `A → C`로 상계되는 예시
+9. 여러 번 실행해도 같은 상태가 되는 개발·테스트 전용 멱등성 seed 스크립트
 
-```text
-receipts.items[].consumer_member_ids[]
-```
-
-서비스 요구사항에는 다음 두 단계의 참여자 선택이 존재한다.
-
-```text
-영수증 참여자
-↓
-메뉴별 참여자
-```
-
-따라서 구현 전에 영수증 참여자를 다음 중 어떤 방식으로 관리할지 확정해야 한다.
-
-```text
-방법 1
-
-receipts에 별도의
-participant_member_ids[]
-필드를 추가한다.
+Seed는 개발·테스트 환경에서만 실행한다.
 
 
-방법 2
+## 초대링크 제약사항
 
-items[].consumer_member_ids[]의
-전체 합집합을 영수증 참여자로 계산한다.
-```
-
-이 부분은 요구사항만으로 임의 결정하지 않는다.
-
-
-### 현재 정의서에서 확정되지 않은 모임 mode
-
-현재 `expense_group.mode`의 DB 데이터는 `shared`를 기준으로 작성되어 있다.
-
-하지만 현재 서비스 기획에서는 다음 두 모드를 사용한다.
-
-```text
-SOLO
-TOGETHER
-```
-
-따라서 구현 전 `expense_group.mode`의 실제 저장 값을 확정해야 한다.
-
-요구사항 확인 없이 `shared`를 임의로 `SOLO / TOGETHER`로 변경하지 않는다.
+- 참여 자리마다 충분히 긴 암호학적 난수 Token이 포함된 고유 URL을 생성한다.
+- Token 원문은 URL로 전달하고 DB에는 해시만 저장한다.
+- 최초 참여에서는 `PENDING` Invite를 조건부로 선점하고 멤버 생성까지 트랜잭션으로 처리한다.
+- 참여 인원이 `expected_member_count`를 넘지 않도록 서버에서 다시 확인한다.
+- 참여가 끝난 Invite는 `member_id`와 연결하여 같은 링크 재접속 시 기존 멤버를 식별한다.
+- 재접속 시 새 `group_member`를 만들지 않고 새 `guest_session`과 HttpOnly Cookie만 발급한다.
+- `REVOKED`이거나 `expires_at`이 지난 Invite는 사용할 수 없다.
+- 브라우저 Cookie에는 Guest Session Token만 저장한다.

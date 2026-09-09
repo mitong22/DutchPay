@@ -1,0 +1,40 @@
+:root {
+  color-scheme: light;
+  --background: #f5f7ff;
+  --foreground: #19213d;
+  --primary: #5366ec;
+  --primary-dark: #4052d6;
+  --surface: #ffffff;
+  --border: #dfe4f5;
+  --muted: #69718a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  background: var(--background);
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  color: var(--foreground);
+  background: var(--background);
+  font-family:
+    Arial,
+    "Apple SD Gothic Neo",
+    "Noto Sans KR",
+    sans-serif;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+}

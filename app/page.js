@@ -1,9 +1,8 @@
-import SelectDb from "@/component/selectDb";
+import ModeSelector from "@/component/modeSelector";
+import { MOCK_CAPTAIN } from "@/lib/mockCaptain";
 
 export default function Home() {
   return (
-    <main>
-      <SelectDb />
-    </main>
+    <ModeSelector captain={MOCK_CAPTAIN} />
   );
 }

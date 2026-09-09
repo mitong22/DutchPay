@@ -143,9 +143,9 @@
   width: 100%;
   min-height: 124px;
   padding: 25px 26px;
-  border: 1px solid transparent;
+  border: 1px solid #d8def2;
   border-radius: 20px;
-  background: #f8f9fc;
+  background: var(--surface);
   text-align: left;
   cursor: pointer;
 }
@@ -156,11 +156,12 @@
   justify-content: space-between;
   gap: 24px;
   color: var(--foreground);
+  box-shadow: 0 7px 18px rgba(25, 33, 61, 0.055);
 }
 
 .receiptRow:hover,
 .addReceiptRow:hover {
-  border-color: #cbd2f6;
+  border-color: #aeb9ef;
   background: #f3f5ff;
 }
 
@@ -200,7 +201,7 @@
   gap: 16px;
   color: var(--foreground);
   border-style: dashed;
-  border-color: #cbd2e9;
+  border-color: #b8c1e6;
 }
 
 .addIcon {
@@ -505,7 +506,10 @@
 
 .menuFieldGrid {
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(150px, 0.7fr);
+  grid-template-columns:
+    minmax(0, 1.4fr)
+    minmax(84px, 0.4fr)
+    minmax(140px, 0.7fr);
   gap: 12px;
   margin-top: 14px;
 }

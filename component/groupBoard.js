@@ -75,6 +75,7 @@ function createMenuDraft(memberIds) {
   return {
     id: createId("menu-draft"),
     name: "",
+    quantity: "1",
     amount: "",
     consumer_member_ids: [...memberIds],
   };
@@ -131,8 +132,16 @@ function ReceiptEntryDialog({ currentMemberId, group, onClose, onSave }) {
     participantMemberIds.includes(member.id),
   );
   const draftTotal = items.reduce((total, item) => {
+    const quantity = Number(item.quantity);
     const amount = Number(item.amount);
-    return total + (Number.isFinite(amount) ? amount : 0);
+
+    return total +
+      (Number.isFinite(quantity) &&
+      Number.isFinite(amount) &&
+      quantity > 0 &&
+      amount > 0
+        ? quantity * amount
+        : 0);
   }, 0);
 
   function selectMethod(methodId) {
@@ -222,6 +231,7 @@ function ReceiptEntryDialog({ currentMemberId, group, onClose, onSave }) {
 
     for (const [index, item] of items.entries()) {
       const name = item.name.trim();
+      const quantity = Number(item.quantity);
       const amount = Number(item.amount);
 
       if (!name) {
@@ -229,8 +239,15 @@ function ReceiptEntryDialog({ currentMemberId, group, onClose, onSave }) {
         return;
       }
 
+      if (!Number.isSafeInteger(quantity) || quantity <= 0) {
+        setValidationMessage(`${index + 1}번 메뉴 수량을 입력해 주세요.`);
+        return;
+      }
+
       if (!Number.isSafeInteger(amount) || amount <= 0) {
-        setValidationMessage(`${index + 1}번 메뉴 금액을 원 단위로 입력해 주세요.`);
+        setValidationMessage(
+          `${index + 1}번 메뉴의 개당 금액을 원 단위로 입력해 주세요.`,
+        );
         return;
       }
 
@@ -245,10 +262,10 @@ function ReceiptEntryDialog({ currentMemberId, group, onClose, onSave }) {
         id: createId("menu"),
         name,
         menu_name: name,
-        quantity: 1,
+        quantity,
         unit_price: amount,
-        amount,
-        line_total: amount,
+        amount: quantity * amount,
+        line_total: quantity * amount,
         consumer_member_ids: item.consumer_member_ids,
       });
     }
@@ -376,7 +393,7 @@ function ReceiptEntryDialog({ currentMemberId, group, onClose, onSave }) {
               <div className={styles.menuEditorHeading}>
                 <div>
                   <h3 id="menu-editor-title">메뉴 목록</h3>
-                  <p>금액과 메뉴를 나눌 사람을 입력해 주세요.</p>
+                  <p>수량, 개당 금액과 메뉴를 나눌 사람을 입력해 주세요.</p>
                 </div>
                 <strong>{formatWon(draftTotal)}</strong>
               </div>
@@ -410,7 +427,21 @@ function ReceiptEntryDialog({ currentMemberId, group, onClose, onSave }) {
                         />
                       </label>
                       <label className={styles.formField}>
-                        <span>금액</span>
+                        <span>수량</span>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          min="1"
+                          step="1"
+                          value={item.quantity}
+                          required
+                          onChange={(event) =>
+                            updateItem(item.id, { quantity: event.target.value })
+                          }
+                        />
+                      </label>
+                      <label className={styles.formField}>
+                        <span>개당 금액</span>
                         <input
                           type="number"
                           inputMode="numeric"
@@ -657,9 +688,12 @@ function ReceiptDetail({ group, receipt, onBack }) {
             <article className={styles.itemRow} key={item.id}>
               <div>
                 <strong>{item.name}</strong>
-                <p>{consumerNames.join(" · ") || "부담할 사람 미정"}</p>
+                <p>
+                  {consumerNames.join(" · ") || "부담할 사람 미정"} · 수량{" "}
+                  {item.quantity ?? 1}개
+                </p>
               </div>
-              <strong>{formatWon(item.amount)}</strong>
+              <strong>{formatWon(item.line_total ?? item.amount)}</strong>
             </article>
           );
         })}

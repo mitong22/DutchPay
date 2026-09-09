@@ -57,6 +57,11 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - 개발용 DB 초기화·초기 데이터: `/scripts/seeds.js`에서만 관리
 - MongoDB 조회: 컴포넌트 간 Props를 필수 항목으로 제한하고, 데이터를 사용하는 Server Component에서 직접 조회
 - `ObjectId()`를 Foreign Key로 사용: DB에 String으로 저장. Better Auth 관리 콜렉션 제외
+- Better Auth 외 업무 데이터 `_id`: UUID 문자열로 통일
+- Guest 인증: `guest_session.member_id`로 영구 `group_member._id`를 참조하며 Session ID와 Member ID를 동일하게 사용하지 않음
+- 영수증 참여자: `receipts.participant_member_ids[]`에 저장하고 메뉴 참여자는 그 부분집합으로 검증
+- 금액: 10원 단위 정수만 허용하고, 나머지 10원 단위 대상은 저장 시 무작위 선택하여 `remainder_recipient_member_ids[]`에 저장
+- 정산 상태: `payment`는 메뉴별 부담 상태만 관리하며 최종 상계 송금 관계는 원본 데이터에서 계산
 - DB.find() 후 데이터를 최대한 .map() 재정의 없이 그대로 전달
 
 ### 검증

@@ -5,6 +5,7 @@ import {
   GROUP_MODE,
   GROUP_STATUS,
   assertGroupMode,
+  createActivatedTogetherState,
   createInitialGroupState,
   createSharedMigrationState,
   shouldActivateTogetherGroup,
@@ -112,5 +113,32 @@ test("a legacy shared group migrates to an ACTIVE TOGETHER state", () => {
       activatedAt: state.activated_at,
     }),
     true,
+  );
+});
+
+test("a TOGETHER group activates only after every expected member joins", () => {
+  const activatedAt = new Date("2026-01-01T01:00:00.000Z");
+
+  assert.deepEqual(
+    createActivatedTogetherState({
+      expectedMemberCount: 4,
+      joinedMemberCount: 4,
+      activatedAt,
+    }),
+    {
+      mode: GROUP_MODE.TOGETHER,
+      status: GROUP_STATUS.ACTIVE,
+      expected_member_count: 4,
+      activated_at: activatedAt,
+    },
+  );
+  assert.throws(
+    () =>
+      createActivatedTogetherState({
+        expectedMemberCount: 4,
+        joinedMemberCount: 3,
+        activatedAt,
+      }),
+    /only when every expected member has joined/,
   );
 });

@@ -139,6 +139,50 @@ function getMemberNames(group, memberIds = []) {
     .filter(Boolean);
 }
 
+function calculateItemShares(item) {
+  const lineTotal = Number(item.line_total ?? item.amount);
+  const memberIds = [...new Set(item.consumer_member_ids ?? [])];
+
+  if (!Number.isSafeInteger(lineTotal) || lineTotal < 0 || memberIds.length === 0) {
+    return [];
+  }
+
+  const baseAmount = Math.floor(lineTotal / memberIds.length);
+  const remainder = lineTotal % memberIds.length;
+
+  return memberIds.map((memberId, index) => ({
+    memberId,
+    amount: baseAmount + (index < remainder ? 1 : 0),
+  }));
+}
+
+function calculateReceiptShares(receipt) {
+  const memberTotals = new Map(
+    (receipt.participant_member_ids ?? []).map((memberId) => [memberId, 0]),
+  );
+  const itemShares = new Map();
+
+  for (const item of receipt.items ?? []) {
+    const shares = calculateItemShares(item);
+    itemShares.set(item.id, shares);
+
+    for (const share of shares) {
+      memberTotals.set(
+        share.memberId,
+        (memberTotals.get(share.memberId) ?? 0) + share.amount,
+      );
+    }
+  }
+
+  return {
+    itemShares,
+    memberTotals: [...memberTotals].map(([memberId, amount]) => ({
+      memberId,
+      amount,
+    })),
+  };
+}
+
 function ReceiptEntryDialog({
   currentMemberId,
   group,
@@ -719,6 +763,7 @@ function ReceiptDetail({
     group,
     receipt.participant_member_ids,
   );
+  const receiptShares = calculateReceiptShares(receipt);
 
   if (isEditing) {
     return (
@@ -806,6 +851,7 @@ function ReceiptDetail({
             group,
             item.consumer_member_ids,
           );
+          const itemShares = receiptShares.itemShares.get(item.id) ?? [];
 
           return (
             <article className={styles.itemRow} key={item.id}>
@@ -817,10 +863,71 @@ function ReceiptDetail({
                 </p>
               </div>
               <strong>{formatWon(item.line_total ?? item.amount)}</strong>
+              <div
+                className={styles.itemShareList}
+                aria-label={`${item.name} 메뉴 분담액`}
+              >
+                {itemShares.map((share) => {
+                  const member = findMember(group, share.memberId);
+
+                  return (
+                    <span className={styles.itemShare} key={share.memberId}>
+                      <span>{member?.nickname ?? "알 수 없음"}</span>
+                      <strong>{formatWon(share.amount)}</strong>
+                    </span>
+                  );
+                })}
+              </div>
             </article>
           );
         })}
       </div>
+
+      <section
+        className={styles.shareSummary}
+        aria-labelledby="receipt-share-title"
+      >
+        <div className={styles.shareSummaryHeading}>
+          <div>
+            <h2 id="receipt-share-title">이번 영수증 부담액</h2>
+            <p>각 사람이 참여한 메뉴의 분담액을 더했어요.</p>
+          </div>
+          <strong>{formatWon(receipt.total_amount)}</strong>
+        </div>
+
+        <div className={styles.shareTotalList}>
+          {receiptShares.memberTotals.map((share) => {
+            const member = findMember(group, share.memberId);
+            const isCurrentMember = share.memberId === currentMemberId;
+
+            return (
+              <div
+                className={`${styles.shareTotalRow} ${
+                  isCurrentMember ? styles.currentShareRow : ""
+                }`}
+                key={share.memberId}
+              >
+                <span className={styles.shareMember}>
+                  <span
+                    className={`${styles.shareAvatar} ${
+                      isCurrentMember ? styles.currentShareAvatar : ""
+                    }`}
+                    aria-hidden="true"
+                  >
+                    {member?.nickname.slice(0, 2) ?? "?"}
+                  </span>
+                  <strong>{member?.nickname ?? "알 수 없음"}</strong>
+                </span>
+                <strong>{formatWon(share.amount)}</strong>
+              </div>
+            );
+          })}
+        </div>
+
+        <p className={styles.calculationNote}>
+          나누어지지 않는 1원은 메뉴에서 선택된 사람 순서대로 배분해요.
+        </p>
+      </section>
 
       {isDeleteConfirming && (
         <div className={styles.deleteConfirmation} role="alert">

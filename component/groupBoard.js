@@ -752,55 +752,63 @@ function ReceiptList({ currentMemberId, group, receipts, onAdd, onSelect }) {
         <p>총 {group.members.length}명</p>
       </section>
 
-      <div className={styles.listHeading}>
-        <h2>모임 영수증</h2>
-        <p>결제자와 참여 인원 포함</p>
-      </div>
+      <div className={styles.boardColumns}>
+        <div className={styles.receiptColumn}>
+          <div className={styles.listHeading}>
+            <h2>모임 영수증</h2>
+            <p>결제자와 참여 인원 포함</p>
+          </div>
 
-      <section className={styles.receiptList} aria-label="영수증 목록">
-        {receipts.map((receipt) => {
-          const payer = findMember(group, receipt.paid_by_member_id);
-          const participantCount = receipt.participant_member_ids?.length ?? 0;
-          const itemCount = receipt.items?.length ?? 0;
+          <section className={styles.receiptList} aria-label="영수증 목록">
+            {receipts.map((receipt) => {
+              const payer = findMember(group, receipt.paid_by_member_id);
+              const participantCount =
+                receipt.participant_member_ids?.length ?? 0;
+              const itemCount = receipt.items?.length ?? 0;
 
-          return (
+              return (
+                <button
+                  className={styles.receiptRow}
+                  type="button"
+                  key={receipt.id}
+                  onClick={() => onSelect(receipt.id)}
+                >
+                  <span className={styles.receiptPrimary}>
+                    <strong>{receipt.title}</strong>
+                    <small>
+                      참여 {participantCount}명 · 메뉴 {itemCount}개
+                    </small>
+                  </span>
+                  <span className={styles.receiptMeta}>
+                    <strong>{formatWon(receipt.total_amount)}</strong>
+                    <small>{payer?.nickname ?? "결제자 미정"} 결제</small>
+                  </span>
+                </button>
+              );
+            })}
+
             <button
-              className={styles.receiptRow}
+              className={styles.addReceiptRow}
               type="button"
-              key={receipt.id}
-              onClick={() => onSelect(receipt.id)}
+              onClick={onAdd}
             >
-              <span className={styles.receiptPrimary}>
-                <strong>{receipt.title}</strong>
-                <small>
-                  참여 {participantCount}명 · 메뉴 {itemCount}개
-                </small>
+              <span className={styles.addIcon} aria-hidden="true">
+                +
               </span>
-              <span className={styles.receiptMeta}>
-                <strong>{formatWon(receipt.total_amount)}</strong>
-                <small>{payer?.nickname ?? "결제자 미정"} 결제</small>
+              <span>
+                <strong>
+                  {receipts.length === 0 ? "첫 영수증 추가" : "영수증 추가"}
+                </strong>
+                <small>직접 입력 · 촬영하기 · 사진 첨부</small>
               </span>
             </button>
-          );
-        })}
+          </section>
+        </div>
 
-        <button className={styles.addReceiptRow} type="button" onClick={onAdd}>
-          <span className={styles.addIcon} aria-hidden="true">
-            +
-          </span>
-          <span>
-            <strong>
-              {receipts.length === 0 ? "첫 영수증 추가" : "영수증 추가"}
-            </strong>
-            <small>직접 입력 · 촬영하기 · 사진 첨부</small>
-          </span>
-        </button>
-      </section>
-
-      <section
-        className={styles.settlementOverview}
-        aria-labelledby="settlement-overview-title"
-      >
+        <section
+          className={styles.settlementOverview}
+          aria-labelledby="settlement-overview-title"
+        >
         <div className={styles.settlementOverviewHeading}>
           <div>
             <p className={styles.eyebrow}>현재까지</p>
@@ -903,7 +911,8 @@ function ReceiptList({ currentMemberId, group, receipts, onAdd, onSelect }) {
         <p className={styles.settlementNote}>
           각 메뉴에서 선택한 사람을 기준으로 계산했어요.
         </p>
-      </section>
+        </section>
+      </div>
     </>
   );
 }

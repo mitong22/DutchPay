@@ -187,7 +187,6 @@
   letter-spacing: -0.025em;
 }
 
-.draftCard,
 .savedGroupCard {
   width: 100%;
   border: 1px solid #d8def2;
@@ -197,35 +196,12 @@
   cursor: pointer;
 }
 
-.draftCard {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 17px;
-  min-height: 94px;
-  padding: 18px 20px;
-  border-color: #bfc8f4;
-  border-radius: 16px;
-  background: #f7f8ff;
-}
-
-.draftStep {
-  padding: 8px 10px;
-  border-radius: 9px;
-  color: var(--primary-dark);
-  background: #e7ebff;
-  font-size: 0.78rem;
-  font-weight: 850;
-}
-
-.draftContent,
 .groupCardMain,
 .groupCardBalance {
   display: grid;
   gap: 6px;
 }
 
-.draftContent small,
 .groupCardMain small,
 .groupCardBalance small {
   color: var(--muted);
@@ -248,7 +224,6 @@
   box-shadow: 0 6px 18px rgba(42, 53, 105, 0.045);
 }
 
-.draftCard:hover,
 .savedGroupCard:hover {
   border-color: #a8b4ee;
   background: #f7f8ff;
@@ -500,7 +475,6 @@
 .modeButton:focus-visible,
 .brand:focus-visible,
 .newGroupButton:focus-visible,
-.draftCard:focus-visible,
 .savedGroupCard:focus-visible,
 .creationNavigation button:focus-visible,
 .primaryButton:focus-visible,
@@ -1052,23 +1026,6 @@
 
   .balanceCards > div {
     padding: 16px;
-  }
-
-  .draftCard {
-    grid-template-columns: 1fr auto;
-  }
-
-  .draftStep {
-    width: fit-content;
-  }
-
-  .draftContent {
-    grid-column: 1;
-  }
-
-  .draftCard .cardArrow {
-    grid-column: 2;
-    grid-row: 1 / 3;
   }
 
   .savedGroupCard {

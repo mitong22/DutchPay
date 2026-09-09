@@ -358,9 +358,7 @@ function Stepper({ currentStep }) {
 
 function Dashboard({
   captain,
-  draft,
   groups,
-  onContinueDraft,
   onCreate,
   onOpenGroup,
 }) {
@@ -380,6 +378,11 @@ function Dashboard({
   const activeSummaries = groupSummaries.filter(
     ({ group }) => group.status !== "COMPLETED",
   );
+  const sortedGroupSummaries = [...groupSummaries].sort(
+    (left, right) =>
+      Number(left.group.status === "COMPLETED") -
+      Number(right.group.status === "COMPLETED"),
+  );
   const receiveAmount = activeSummaries.reduce(
     (total, summary) => total + Math.max(summary.captainBalance, 0),
     0,
@@ -388,11 +391,6 @@ function Dashboard({
     (total, summary) => total + Math.max(-summary.captainBalance, 0),
     0,
   );
-  const hasDraft =
-    !draft.completed &&
-    Boolean(draft.mode || draft.groupName.trim() || draft.step > 1);
-  const draftModeLabel = MODES.find((mode) => mode.id === draft.mode)?.label;
-
   return (
     <main className={styles.dashboardMain}>
       <section className={styles.dashboardHero} aria-labelledby="dashboard-title">
@@ -427,25 +425,6 @@ function Dashboard({
         </dl>
       </section>
 
-      {hasDraft && (
-        <section className={styles.dashboardSection} aria-labelledby="draft-title">
-          <div className={styles.sectionHeadingRow}>
-            <div>
-              <p className={styles.eyebrow}>작성 중</p>
-              <h2 id="draft-title">멈춘 곳에서 이어서 만들기</h2>
-            </div>
-          </div>
-          <button className={styles.draftCard} type="button" onClick={onContinueDraft}>
-            <span className={styles.draftStep}>STEP {draft.step} / 3</span>
-            <span className={styles.draftContent}>
-              <strong>{draft.groupName.trim() || "이름 없는 새 모임"}</strong>
-              <small>{draftModeLabel ?? "방식 선택 전"} · 자동 저장됨</small>
-            </span>
-            <span className={styles.cardArrow} aria-hidden="true">→</span>
-          </button>
-        </section>
-      )}
-
       <section className={styles.dashboardSection} aria-labelledby="saved-title">
         <div className={styles.sectionHeadingRow}>
           <div>
@@ -456,7 +435,7 @@ function Dashboard({
 
         {groupSummaries.length > 0 ? (
           <div className={styles.savedGroupList}>
-            {groupSummaries.map(({ group, receiptSummary, captainBalance }) => {
+            {sortedGroupSummaries.map(({ group, receiptSummary, captainBalance }) => {
               const isCompleted = group.status === "COMPLETED";
               const balanceLabel =
                 captainBalance > 0
@@ -993,11 +972,6 @@ export default function ModeSelector({ captain }) {
     resetPageScroll();
   }
 
-  function continueDraft() {
-    setScreen("create");
-    resetPageScroll();
-  }
-
   function completeGroup(groupId) {
     const group = groups.find((currentGroup) => currentGroup.id === groupId);
 
@@ -1100,9 +1074,7 @@ export default function ModeSelector({ captain }) {
       ) : (
         <Dashboard
           captain={captain}
-          draft={draft}
           groups={groups}
-          onContinueDraft={continueDraft}
           onCreate={startNewGroup}
           onOpenGroup={openGroup}
         />

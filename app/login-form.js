@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 
 import { signInAction } from "@/app/actions";
@@ -47,11 +48,15 @@ export default function LoginForm() {
         </p>
       ) : null}
 
-      <button className="button button--primary button--wide" disabled={isPending}>
+      <button
+        className="button button--primary button--wide"
+        disabled={isPending}
+        type="submit"
+      >
         {isPending ? "로그인 중..." : "로그인"}
       </button>
       <p className="login-card__help">
-        개발용 계정은 프로젝트의 seed 데이터에 정의되어 있습니다.
+        아직 계정이 없으신가요? <Link href="/signup">회원가입</Link>
       </p>
     </form>
   );

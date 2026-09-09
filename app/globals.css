@@ -236,6 +236,26 @@ button:disabled {
   text-align: center;
 }
 
+.login-card__help a {
+  color: var(--primary);
+  font-weight: 750;
+}
+
+.login-card__help a:hover {
+  text-decoration: underline;
+}
+
+.signup-page {
+  display: grid;
+  min-height: 670px;
+  padding-block: 64px;
+  place-items: center;
+}
+
+.signup-card {
+  width: min(100%, 470px);
+}
+
 .field {
   display: grid;
   gap: 8px;

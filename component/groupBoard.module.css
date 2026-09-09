@@ -1,0 +1,278 @@
+.boardMain {
+  width: min(1120px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 44px 0 72px;
+}
+
+.groupOverview,
+.receiptPanel,
+.detailPanel {
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+}
+
+.groupOverview {
+  padding: 30px;
+}
+
+.groupHeading,
+.panelHeading,
+.dialogHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.eyebrow {
+  margin: 0 0 7px;
+  color: var(--primary);
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.groupHeading h1 {
+  margin: 0;
+  font-size: clamp(1.75rem, 4vw, 2.25rem);
+  letter-spacing: -0.04em;
+}
+
+.memberArea {
+  margin-top: 24px;
+  padding-top: 22px;
+  border-top: 1px solid var(--border);
+}
+
+.memberArea > p {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.memberList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.memberList span {
+  padding: 8px 12px;
+  border: 1px solid #d9def5;
+  border-radius: 999px;
+  color: #3847a3;
+  background: #f4f6ff;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.boardGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.receiptPanel,
+.detailPanel {
+  min-height: 360px;
+  padding: 28px;
+}
+
+.panelHeading h2,
+.detailPanel h2,
+.dialog h2 {
+  margin: 0;
+  letter-spacing: -0.025em;
+}
+
+.panelHeading p {
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+
+.primaryButton,
+.secondaryButton,
+.emptyAddButton,
+.closeButton,
+.methodTabs button {
+  border: 0;
+  border-radius: 10px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.primaryButton,
+.secondaryButton,
+.emptyAddButton {
+  min-height: 44px;
+  padding: 0 17px;
+}
+
+.primaryButton,
+.emptyAddButton {
+  color: #ffffff;
+  background: var(--primary);
+}
+
+.primaryButton:hover,
+.emptyAddButton:hover {
+  background: var(--primary-dark);
+}
+
+.secondaryButton {
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  background: var(--surface);
+}
+
+.secondaryButton:hover {
+  background: #f7f8fc;
+}
+
+.primaryButton:focus-visible,
+.secondaryButton:focus-visible,
+.emptyAddButton:focus-visible,
+.closeButton:focus-visible,
+.methodTabs button:focus-visible {
+  outline: 3px solid rgba(83, 102, 236, 0.3);
+  outline-offset: 3px;
+}
+
+.emptyState {
+  display: grid;
+  min-height: 255px;
+  place-items: center;
+  align-content: center;
+  padding: 36px 20px;
+  border: 1px dashed #cdd4ee;
+  border-radius: 14px;
+  margin-top: 24px;
+  text-align: center;
+}
+
+.emptyState strong {
+  font-size: 1.05rem;
+}
+
+.emptyState p {
+  margin: 9px 0 20px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.detailPanel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
+}
+
+.detailPanel > p:last-child {
+  margin: 12px auto 0;
+  max-width: 300px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.dialogBackdrop {
+  position: fixed;
+  z-index: 10;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(25, 33, 61, 0.48);
+}
+
+.dialog {
+  width: min(560px, 100%);
+  padding: 26px;
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: 0 24px 70px rgba(25, 33, 61, 0.2);
+}
+
+.closeButton {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  color: var(--muted);
+  background: #f2f4fa;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.methodTabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 26px;
+}
+
+.methodTabs button {
+  min-height: 48px;
+  padding: 0 10px;
+  color: var(--muted);
+  background: #f2f4fa;
+}
+
+.methodTabs .selectedMethod {
+  color: #ffffff;
+  background: var(--primary);
+}
+
+.methodDescription {
+  min-height: 54px;
+  margin: 16px 0 0;
+  padding: 16px;
+  border-radius: 11px;
+  color: var(--muted);
+  background: #f7f8fc;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.dialogActions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 22px;
+}
+
+@media (max-width: 760px) {
+  .boardMain {
+    width: min(100% - 24px, 560px);
+    padding: 28px 0 52px;
+  }
+
+  .groupOverview,
+  .receiptPanel,
+  .detailPanel {
+    padding: 22px 20px;
+  }
+
+  .groupHeading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .boardGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .receiptPanel,
+  .detailPanel {
+    min-height: auto;
+  }
+
+  .detailPanel {
+    padding-top: 44px;
+    padding-bottom: 44px;
+  }
+
+  .methodTabs {
+    grid-template-columns: 1fr;
+  }
+}

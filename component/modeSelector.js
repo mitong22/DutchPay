@@ -2,6 +2,7 @@
 
 import { useState, useSyncExternalStore } from "react";
 
+import GroupBoard from "./groupBoard";
 import styles from "./modeSelector.module.css";
 
 const LEGACY_MODE_KEY = "dutchpay:group-draft:mode";
@@ -478,43 +479,6 @@ function ConfirmationStep({ captain, draft, onCreate }) {
   );
 }
 
-function CompletedStep({ group, onReset }) {
-  return (
-    <div className={styles.completedPanel}>
-      <span className={styles.completedIcon} aria-hidden="true">
-        ✓
-      </span>
-      <p className={styles.eyebrow}>SOLO · ACTIVE</p>
-      <h1 id="create-heading">모임이 만들어졌어요</h1>
-      <p>
-        <strong>{group.name}</strong>에서 {group.members.length}명이 함께
-        정산할 준비가 됐어요.
-      </p>
-
-      <div className={styles.memberChips}>
-        {group.members.map((member) => (
-          <span key={member.id}>
-            {member.nickname}
-            {member.member_type === "registered" ? " · 총대" : ""}
-          </span>
-        ))}
-      </div>
-
-      <p className={styles.savedMessage}>
-        이 모임은 현재 브라우저에 저장되어 있어요.
-      </p>
-
-      <button
-        className={styles.secondaryButton}
-        type="button"
-        onClick={onReset}
-      >
-        새 모임 만들기
-      </button>
-    </div>
-  );
-}
-
 export default function ModeSelector({ captain }) {
   const draftSnapshot = useSyncExternalStore(
     subscribeToDemoStore,
@@ -595,25 +559,27 @@ export default function ModeSelector({ captain }) {
         </div>
       </header>
 
-      <main className={styles.main}>
-        <Stepper currentStep={showCompleted ? 3 : draft.step} />
+      {showCompleted ? (
+        <GroupBoard group={activeGroup} onReset={resetDemo} />
+      ) : (
+        <main className={styles.main}>
+          <Stepper currentStep={draft.step} />
 
-        <section className={styles.card} aria-labelledby="create-heading">
-          {showCompleted ? (
-            <CompletedStep group={activeGroup} onReset={resetDemo} />
-          ) : draft.step === 1 ? (
-            <ModeStep draft={draft} />
-          ) : draft.step === 2 ? (
-            <MemberStep captain={captain} draft={draft} />
-          ) : (
-            <ConfirmationStep
-              captain={captain}
-              draft={draft}
-              onCreate={createGroup}
-            />
-          )}
-        </section>
-      </main>
+          <section className={styles.card} aria-labelledby="create-heading">
+            {draft.step === 1 ? (
+              <ModeStep draft={draft} />
+            ) : draft.step === 2 ? (
+              <MemberStep captain={captain} draft={draft} />
+            ) : (
+              <ConfirmationStep
+                captain={captain}
+                draft={draft}
+                onCreate={createGroup}
+              />
+            )}
+          </section>
+        </main>
+      )}
     </div>
   );
 }

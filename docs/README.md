@@ -546,6 +546,8 @@ Invite Token은 해당 사용자가 특정 모임에 들어올 수 있는 자격
 
 Invite Token은 충분히 긴 암호학적으로 안전한 난수로 생성한다. 원문은 사용자에게 초대 URL로 전달하고 DB에는 SHA-256 등의 해시값만 저장한다.
 
+Invite Token은 생성 시점부터 7일 동안 유효하며 `expires_at`에 만료 시각을 저장한다.
+
 Invite 하나는 참여 예정 인원 중 한 자리를 의미한다. Invite 생성 시에는 아직 참여자가 입장하지 않았으므로 `member_id`를 `null`로 저장하고 `group_member`를 미리 만들지 않는다.
 
 최초로 유효한 Invite를 사용하면 서버가 예정 인원을 다시 확인한 뒤 `group_member`를 생성하고, 생성된 멤버 ID를 `invite.member_id`에 기록한다. 이 처리는 같은 Invite의 동시 사용으로 참여 인원이 초과되지 않도록 원자적으로 수행한다.
@@ -604,6 +606,8 @@ created_at
 
 Guest Session Token은 충분히 긴 암호학적으로 안전한 난수로 생성한다.
 
+Guest Session은 발급 시점부터 7일 동안 유효하며 `expires_at`에 만료 시각을 저장한다.
+
 브라우저에는 Guest Session Token 원문을 HttpOnly Cookie로 전달하고, 서버에서는 동일한 방식으로 해시한 값으로 MongoDB의 Guest Session 데이터를 조회한다.
 
 `guest_session._id`와 `group_member._id`는 서로 다른 영구 식별자이다. Guest Session을 재발급해도 기존 `group_member._id`는 변경하지 않으며, `guest_session.member_id`로 기존 멤버를 참조한다. Guest Session Token 원문은 DB에 저장하지 않고 `token_hash`만 저장한다.
@@ -623,6 +627,8 @@ nickname
 ### 6. Cookie
 
 Guest Session Token은 **HttpOnly Cookie**에 저장한다.
+
+Cookie의 만료 시각은 Guest Session의 `expires_at`과 동일하게 설정하여 발급 시점부터 최대 7일 동안 유지한다.
 
 다음 보안 옵션을 사용한다.
 
@@ -1191,9 +1197,6 @@ PC와 모바일에서 모두 사용할 수 있는 반응형 UI로 구현한다.
 다음 사항은 아직 세부 정책이 확정되지 않았으므로 임의로 결정하지 않는다.
 
 - 실제 사용할 카카오톡 API의 구체적인 방식
-- Invite Token의 정확한 만료 기간
-- Guest Session의 정확한 만료 기간
-- Cookie의 정확한 유지 기간
 - OCR 서비스와 영수증 이미지 저장 방식
 
 위 항목이 구현 과정에서 필요해지면 임의로 결정하지 말고 사용자에게 먼저 질문한다.

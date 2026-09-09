@@ -1,35 +1,51 @@
 const { MongoClient } = require("mongodb");
 
+const {
+  validateSeedDocuments,
+} = require("./seed-data-validation.js");
+
+// Atlas 원본의 관계와 금액은 유지하되 원본 ID와 이름은 저장하지 않는다.
 // 인자 없이 실행하거나 --preview를 사용하면 DB에 연결하지 않는다.
 // 실제 쓰기는 --write와 ALLOW_DATABASE_SEED=true가 모두 있을 때만 허용한다.
 
 const SEED_GROUP_IDS = Object.freeze({
-  SOLO_ACTIVE: "10000000-0000-4000-8000-000000000001",
   TOGETHER_WAITING: "20000000-0000-4000-8000-000000000001",
-  TOGETHER_ACTIVE: "30000000-0000-4000-8000-000000000001",
+  TOGETHER_ACTIVE_FROM_SHARED: "30000000-0000-4000-8000-000000000001",
 });
 
 const SEED_MEMBER_IDS = Object.freeze({
-  SOLO_OWNER: "11000000-0000-4000-8000-000000000001",
-  SOLO_GUEST_1: "11000000-0000-4000-8000-000000000002",
-  SOLO_GUEST_2: "11000000-0000-4000-8000-000000000003",
-  SOLO_GUEST_3: "11000000-0000-4000-8000-000000000004",
   WAITING_OWNER: "21000000-0000-4000-8000-000000000001",
-  WAITING_GUEST_1: "21000000-0000-4000-8000-000000000002",
-  WAITING_GUEST_2: "21000000-0000-4000-8000-000000000003",
   ACTIVE_OWNER: "31000000-0000-4000-8000-000000000001",
   ACTIVE_GUEST_1: "31000000-0000-4000-8000-000000000002",
   ACTIVE_GUEST_2: "31000000-0000-4000-8000-000000000003",
   ACTIVE_GUEST_3: "31000000-0000-4000-8000-000000000004",
 });
 
-function createMember({
-  id,
-  groupId,
-  nickname,
-  ownerUserId = null,
-  createdAt,
-}) {
+const SEED_RECEIPT_IDS = Object.freeze({
+  ACTIVE_MEAL: "32000000-0000-4000-8000-000000000001",
+});
+
+const SEED_ITEM_IDS = Object.freeze({
+  ACTIVE_MENU_1: "32100000-0000-4000-8000-000000000001",
+  ACTIVE_MENU_2: "32100000-0000-4000-8000-000000000002",
+});
+
+const SEED_PAYMENT_IDS = Object.freeze({
+  MENU_1_OWNER: "33000000-0000-4000-8000-000000000001",
+  MENU_1_GUEST_3: "33000000-0000-4000-8000-000000000002",
+  MENU_1_GUEST_2: "33000000-0000-4000-8000-000000000003",
+  MENU_2_OWNER: "33000000-0000-4000-8000-000000000004",
+  MENU_2_GUEST_3: "33000000-0000-4000-8000-000000000005",
+});
+
+const ATLAS_SNAPSHOT_TIMESTAMPS = Object.freeze({
+  TOGETHER_WAITING_CREATED_AT: "2026-09-08T08:14:53.732Z",
+  SHARED_CREATED_AT: "2026-09-07T07:56:11.746Z",
+  PAYMENT_CREATED_AT: "2026-09-08T03:06:43.019Z",
+  NORMALIZED_AT: "2026-09-09T00:00:00.000Z",
+});
+
+function createMember({ id, groupId, nickname, ownerUserId = null }) {
   const isRegisteredOwner = ownerUserId !== null;
 
   return {
@@ -38,8 +54,19 @@ function createMember({
     user_id: ownerUserId,
     nickname,
     member_type: isRegisteredOwner ? "registered" : "guest",
+  };
+}
+
+function createPayment({ id, itemId, payerMemberId, status, createdAt }) {
+  return {
+    _id: id,
+    group_id: SEED_GROUP_IDS.TOGETHER_ACTIVE_FROM_SHARED,
+    receipt_id: SEED_RECEIPT_IDS.ACTIVE_MEAL,
+    expense_item_id: itemId,
+    payer_member_id: payerMemberId,
+    payee_member_id: SEED_MEMBER_IDS.ACTIVE_OWNER,
+    status,
     created_at: new Date(createdAt.getTime()),
-    joined_at: new Date(createdAt.getTime()),
   };
 }
 
@@ -50,190 +77,223 @@ async function buildSeedDocuments(ownerUserId) {
 
   const {
     GROUP_MODE,
-    GROUP_STATUS,
     createInitialGroupState,
     createSharedMigrationState,
     validatePersistedGroupState,
   } = await import("../lib/group-rules.mjs");
 
-  const soloCreatedAt = new Date("2026-01-10T09:00:00.000Z");
-  const waitingCreatedAt = new Date("2026-01-11T09:00:00.000Z");
-  const activeCreatedAt = new Date("2026-01-12T09:00:00.000Z");
-
-  const soloState = createInitialGroupState({
-    mode: GROUP_MODE.SOLO,
-    expectedMemberCount: 4,
-    createdAt: soloCreatedAt,
-  });
+  const waitingCreatedAt = new Date(
+    ATLAS_SNAPSHOT_TIMESTAMPS.TOGETHER_WAITING_CREATED_AT,
+  );
+  const sharedCreatedAt = new Date(
+    ATLAS_SNAPSHOT_TIMESTAMPS.SHARED_CREATED_AT,
+  );
+  const paymentCreatedAt = new Date(
+    ATLAS_SNAPSHOT_TIMESTAMPS.PAYMENT_CREATED_AT,
+  );
+  const normalizedAt = new Date(ATLAS_SNAPSHOT_TIMESTAMPS.NORMALIZED_AT);
   const waitingState = createInitialGroupState({
     mode: GROUP_MODE.TOGETHER,
     expectedMemberCount: 4,
     createdAt: waitingCreatedAt,
   });
-  const activeState = createSharedMigrationState({
+  const migratedSharedState = createSharedMigrationState({
     memberCount: 4,
-    createdAt: activeCreatedAt,
+    createdAt: sharedCreatedAt,
   });
 
   const expenseGroups = [
     {
-      _id: SEED_GROUP_IDS.SOLO_ACTIVE,
-      name: "[SEED] SOLO 활성 모임",
-      created_by: ownerUserId,
-      ...soloState,
-      created_at: soloCreatedAt,
-      updated_at: soloCreatedAt,
-    },
-    {
       _id: SEED_GROUP_IDS.TOGETHER_WAITING,
-      name: "[SEED] TOGETHER 대기 모임",
+      name: "[SEED] Atlas 기반 TOGETHER 대기 모임",
       created_by: ownerUserId,
       ...waitingState,
       created_at: waitingCreatedAt,
-      updated_at: waitingCreatedAt,
+      updated_at: new Date(normalizedAt.getTime()),
     },
     {
-      _id: SEED_GROUP_IDS.TOGETHER_ACTIVE,
-      name: "[SEED] 기존 shared 전환 모임",
+      _id: SEED_GROUP_IDS.TOGETHER_ACTIVE_FROM_SHARED,
+      name: "[SEED] Atlas shared 전환 모임",
       created_by: ownerUserId,
-      ...activeState,
-      created_at: activeCreatedAt,
-      updated_at: activeCreatedAt,
+      ...migratedSharedState,
+      created_at: sharedCreatedAt,
+      updated_at: new Date(normalizedAt.getTime()),
     },
   ];
 
   const groupMembers = [
     createMember({
-      id: SEED_MEMBER_IDS.SOLO_OWNER,
-      groupId: SEED_GROUP_IDS.SOLO_ACTIVE,
-      nickname: "SOLO 총대",
-      ownerUserId,
-      createdAt: soloCreatedAt,
-    }),
-    createMember({
-      id: SEED_MEMBER_IDS.SOLO_GUEST_1,
-      groupId: SEED_GROUP_IDS.SOLO_ACTIVE,
-      nickname: "SOLO 참여자 1",
-      createdAt: soloCreatedAt,
-    }),
-    createMember({
-      id: SEED_MEMBER_IDS.SOLO_GUEST_2,
-      groupId: SEED_GROUP_IDS.SOLO_ACTIVE,
-      nickname: "SOLO 참여자 2",
-      createdAt: soloCreatedAt,
-    }),
-    createMember({
-      id: SEED_MEMBER_IDS.SOLO_GUEST_3,
-      groupId: SEED_GROUP_IDS.SOLO_ACTIVE,
-      nickname: "SOLO 참여자 3",
-      createdAt: soloCreatedAt,
-    }),
-    createMember({
       id: SEED_MEMBER_IDS.WAITING_OWNER,
       groupId: SEED_GROUP_IDS.TOGETHER_WAITING,
-      nickname: "TOGETHER 총대",
+      nickname: "대기 모임 총대",
       ownerUserId,
-      createdAt: waitingCreatedAt,
-    }),
-    createMember({
-      id: SEED_MEMBER_IDS.WAITING_GUEST_1,
-      groupId: SEED_GROUP_IDS.TOGETHER_WAITING,
-      nickname: "TOGETHER 참여자 1",
-      createdAt: waitingCreatedAt,
-    }),
-    createMember({
-      id: SEED_MEMBER_IDS.WAITING_GUEST_2,
-      groupId: SEED_GROUP_IDS.TOGETHER_WAITING,
-      nickname: "TOGETHER 참여자 2",
-      createdAt: waitingCreatedAt,
     }),
     createMember({
       id: SEED_MEMBER_IDS.ACTIVE_OWNER,
-      groupId: SEED_GROUP_IDS.TOGETHER_ACTIVE,
+      groupId: SEED_GROUP_IDS.TOGETHER_ACTIVE_FROM_SHARED,
       nickname: "전환 모임 총대",
       ownerUserId,
-      createdAt: activeCreatedAt,
     }),
     createMember({
       id: SEED_MEMBER_IDS.ACTIVE_GUEST_1,
-      groupId: SEED_GROUP_IDS.TOGETHER_ACTIVE,
+      groupId: SEED_GROUP_IDS.TOGETHER_ACTIVE_FROM_SHARED,
       nickname: "전환 모임 참여자 1",
-      createdAt: activeCreatedAt,
     }),
     createMember({
       id: SEED_MEMBER_IDS.ACTIVE_GUEST_2,
-      groupId: SEED_GROUP_IDS.TOGETHER_ACTIVE,
+      groupId: SEED_GROUP_IDS.TOGETHER_ACTIVE_FROM_SHARED,
       nickname: "전환 모임 참여자 2",
-      createdAt: activeCreatedAt,
     }),
     createMember({
       id: SEED_MEMBER_IDS.ACTIVE_GUEST_3,
-      groupId: SEED_GROUP_IDS.TOGETHER_ACTIVE,
+      groupId: SEED_GROUP_IDS.TOGETHER_ACTIVE_FROM_SHARED,
       nickname: "전환 모임 참여자 3",
-      createdAt: activeCreatedAt,
     }),
   ];
 
-  for (const group of expenseGroups) {
-    const joinedMemberCount = groupMembers.filter(
-      (member) => member.group_id === group._id,
-    ).length;
+  const receipts = [
+    {
+      _id: SEED_RECEIPT_IDS.ACTIVE_MEAL,
+      group_id: SEED_GROUP_IDS.TOGETHER_ACTIVE_FROM_SHARED,
+      store_name: "[SEED] Atlas 기반 식당",
+      total_amount: 36000,
+      paid_by_member_id: SEED_MEMBER_IDS.ACTIVE_OWNER,
+      uploaded_by_member_id: SEED_MEMBER_IDS.ACTIVE_OWNER,
+      items: [
+        {
+          _id: SEED_ITEM_IDS.ACTIVE_MENU_1,
+          menu_name: "메뉴 1",
+          quantity: 2,
+          unit_price: 15000,
+          line_total: 30000,
+          consumer_member_ids: [
+            SEED_MEMBER_IDS.ACTIVE_OWNER,
+            SEED_MEMBER_IDS.ACTIVE_GUEST_3,
+            SEED_MEMBER_IDS.ACTIVE_GUEST_2,
+          ],
+        },
+        {
+          _id: SEED_ITEM_IDS.ACTIVE_MENU_2,
+          menu_name: "메뉴 2",
+          quantity: 2,
+          unit_price: 3000,
+          line_total: 6000,
+          consumer_member_ids: [
+            SEED_MEMBER_IDS.ACTIVE_OWNER,
+            SEED_MEMBER_IDS.ACTIVE_GUEST_3,
+          ],
+        },
+      ],
+    },
+  ];
 
-    validatePersistedGroupState({
-      mode: group.mode,
-      status: group.status,
-      expectedMemberCount: group.expected_member_count,
-      joinedMemberCount,
-      activatedAt: group.activated_at,
-    });
+  const payments = [
+    createPayment({
+      id: SEED_PAYMENT_IDS.MENU_1_OWNER,
+      itemId: SEED_ITEM_IDS.ACTIVE_MENU_1,
+      payerMemberId: SEED_MEMBER_IDS.ACTIVE_OWNER,
+      status: "paid",
+      createdAt: paymentCreatedAt,
+    }),
+    createPayment({
+      id: SEED_PAYMENT_IDS.MENU_1_GUEST_3,
+      itemId: SEED_ITEM_IDS.ACTIVE_MENU_1,
+      payerMemberId: SEED_MEMBER_IDS.ACTIVE_GUEST_3,
+      status: "unpaid",
+      createdAt: paymentCreatedAt,
+    }),
+    createPayment({
+      id: SEED_PAYMENT_IDS.MENU_1_GUEST_2,
+      itemId: SEED_ITEM_IDS.ACTIVE_MENU_1,
+      payerMemberId: SEED_MEMBER_IDS.ACTIVE_GUEST_2,
+      status: "unpaid",
+      createdAt: paymentCreatedAt,
+    }),
+    createPayment({
+      id: SEED_PAYMENT_IDS.MENU_2_OWNER,
+      itemId: SEED_ITEM_IDS.ACTIVE_MENU_2,
+      payerMemberId: SEED_MEMBER_IDS.ACTIVE_OWNER,
+      status: "paid",
+      createdAt: paymentCreatedAt,
+    }),
+    createPayment({
+      id: SEED_PAYMENT_IDS.MENU_2_GUEST_3,
+      itemId: SEED_ITEM_IDS.ACTIVE_MENU_2,
+      payerMemberId: SEED_MEMBER_IDS.ACTIVE_GUEST_3,
+      status: "unpaid",
+      createdAt: paymentCreatedAt,
+    }),
+  ];
+  const seedDocuments = {
+    expenseGroups,
+    groupMembers,
+    receipts,
+    payments,
+  };
 
-    const ownerMembers = groupMembers.filter(
-      (member) =>
-        member.group_id === group._id &&
-        member.member_type === "registered" &&
-        member.user_id === ownerUserId,
-    );
+  validateSeedDocuments(seedDocuments, validatePersistedGroupState);
 
-    if (ownerMembers.length !== 1) {
-      throw new Error(`Seed group ${group._id} must have exactly one registered owner.`);
-    }
-  }
-
-  const hasLegacySharedMode = expenseGroups.some(
-    (group) => group.mode === "shared",
-  );
-
-  if (hasLegacySharedMode) {
-    throw new Error('Seed documents must not contain mode: "shared".');
-  }
-
-  return { expenseGroups, groupMembers };
+  return seedDocuments;
 }
 
 function createSeedPreview(seedDocuments) {
   return {
+    source: "anonymized Atlas snapshot normalized to the current schema",
     writesToDatabase: false,
     collections: {
       expense_group: seedDocuments.expenseGroups.length,
       group_member: seedDocuments.groupMembers.length,
+      receipts: seedDocuments.receipts.length,
+      payment: seedDocuments.payments.length,
     },
-    groups: seedDocuments.expenseGroups.map((group) => ({
-      name: group.name,
-      mode: group.mode,
-      status: group.status,
-      expectedMemberCount: group.expected_member_count,
-      joinedMemberCount: seedDocuments.groupMembers.filter(
+    groups: seedDocuments.expenseGroups.map((group) => {
+      const groupMembers = seedDocuments.groupMembers.filter(
         (member) => member.group_id === group._id,
-      ).length,
-      registeredMemberCount: seedDocuments.groupMembers.filter(
-        (member) =>
-          member.group_id === group._id && member.member_type === "registered",
-      ).length,
-      guestMemberCount: seedDocuments.groupMembers.filter(
-        (member) => member.group_id === group._id && member.member_type === "guest",
-      ).length,
-    })),
+      );
+      const groupReceipts = seedDocuments.receipts.filter(
+        (receipt) => receipt.group_id === group._id,
+      );
+      const groupPayments = seedDocuments.payments.filter(
+        (payment) => payment.group_id === group._id,
+      );
+
+      return {
+        name: group.name,
+        mode: group.mode,
+        status: group.status,
+        expectedMemberCount: group.expected_member_count,
+        joinedMemberCount: groupMembers.length,
+        registeredMemberCount: groupMembers.filter(
+          (member) => member.member_type === "registered",
+        ).length,
+        guestMemberCount: groupMembers.filter(
+          (member) => member.member_type === "guest",
+        ).length,
+        receiptCount: groupReceipts.length,
+        itemCount: groupReceipts.reduce(
+          (count, receipt) => count + receipt.items.length,
+          0,
+        ),
+        paymentCount: groupPayments.length,
+      };
+    }),
   };
+}
+
+function createReplaceOperations(documents) {
+  return documents.map((document) => ({
+    replaceOne: {
+      filter: { _id: document._id },
+      replacement: document,
+      upsert: true,
+    },
+  }));
+}
+
+async function writeCollection(db, collectionName, documents) {
+  return db
+    .collection(collectionName)
+    .bulkWrite(createReplaceOperations(documents));
 }
 
 async function writeSeedDocuments() {
@@ -255,7 +315,9 @@ async function writeSeedDocuments() {
     );
   }
 
-  const client = new MongoClient(uri);
+  const client = new MongoClient(uri, {
+    appName: "DutchPayAtlasBasedSeed",
+  });
   await client.connect();
 
   try {
@@ -267,29 +329,33 @@ async function writeSeedDocuments() {
       .toArray();
 
     if (ownerUsers.length !== 1) {
-      throw new Error("SEED_OWNER_EMAIL must identify exactly one Better Auth user.");
+      throw new Error(
+        "SEED_OWNER_EMAIL must identify exactly one Better Auth user.",
+      );
     }
 
-    const seedDocuments = await buildSeedDocuments(ownerUsers[0]._id.toString());
-
-    const groupResult = await db.collection("expense_group").bulkWrite(
-      seedDocuments.expenseGroups.map((group) => ({
-        replaceOne: {
-          filter: { _id: group._id },
-          replacement: group,
-          upsert: true,
-        },
-      })),
+    const seedDocuments = await buildSeedDocuments(
+      ownerUsers[0]._id.toString(),
     );
-
-    const memberResult = await db.collection("group_member").bulkWrite(
-      seedDocuments.groupMembers.map((member) => ({
-        replaceOne: {
-          filter: { _id: member._id },
-          replacement: member,
-          upsert: true,
-        },
-      })),
+    const groupResult = await writeCollection(
+      db,
+      "expense_group",
+      seedDocuments.expenseGroups,
+    );
+    const memberResult = await writeCollection(
+      db,
+      "group_member",
+      seedDocuments.groupMembers,
+    );
+    const receiptResult = await writeCollection(
+      db,
+      "receipts",
+      seedDocuments.receipts,
+    );
+    const paymentResult = await writeCollection(
+      db,
+      "payment",
+      seedDocuments.payments,
     );
 
     console.log(
@@ -301,6 +367,10 @@ async function writeSeedDocuments() {
           expenseGroupsUpserted: groupResult.upsertedCount,
           groupMembersMatched: memberResult.matchedCount,
           groupMembersUpserted: memberResult.upsertedCount,
+          receiptsMatched: receiptResult.matchedCount,
+          receiptsUpserted: receiptResult.upsertedCount,
+          paymentsMatched: paymentResult.matchedCount,
+          paymentsUpserted: paymentResult.upsertedCount,
         },
         null,
         2,
@@ -311,11 +381,28 @@ async function writeSeedDocuments() {
   }
 }
 
+function parseSeedCommand(argumentsList) {
+  if (argumentsList.length === 0) {
+    return "--preview";
+  }
+
+  if (
+    argumentsList.length === 1 &&
+    (argumentsList[0] === "--preview" || argumentsList[0] === "--write")
+  ) {
+    return argumentsList[0];
+  }
+
+  throw new Error('Use either no argument, "--preview", or "--write".');
+}
+
 async function main() {
-  const command = process.argv[2] || "--preview";
+  const command = parseSeedCommand(process.argv.slice(2));
 
   if (command === "--preview") {
-    const seedDocuments = await buildSeedDocuments("preview-better-auth-user-id");
+    const seedDocuments = await buildSeedDocuments(
+      "preview-better-auth-user-id",
+    );
     console.log(JSON.stringify(createSeedPreview(seedDocuments), null, 2));
     return;
   }
@@ -337,7 +424,11 @@ if (require.main === module) {
 
 module.exports = {
   SEED_GROUP_IDS,
+  SEED_ITEM_IDS,
   SEED_MEMBER_IDS,
+  SEED_PAYMENT_IDS,
+  SEED_RECEIPT_IDS,
   buildSeedDocuments,
   createSeedPreview,
+  parseSeedCommand,
 };

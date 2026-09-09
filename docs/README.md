@@ -1945,6 +1945,20 @@ TOGETHER
 
 개발용 Seed는 `/scripts/seeds.js`에서만 관리한다. Seed는 실제 Better Auth 사용자 문서를 생성하거나 수정하지 않고, `SEED_OWNER_EMAIL`로 조회한 기존 개발 사용자의 문자열 ID만 `created_by`와 총대 멤버의 `user_id`에 사용한다.
 
+현재 Seed 데이터는 2026-09-09에 Atlas의 기존 `shared` 1건과 `TOGETHER` 1건을 읽기 전용으로 확인한 결과를 기반으로 한다. 원본 Atlas 문서의 ID와 그룹명·닉네임·가게명·메뉴명은 저장하지 않고 Seed 전용 고정 ID와 익명 이름으로 변경했다. 날짜·금액·메뉴별 참여 관계와 payment 상태는 원본 구조를 유지했다.
+
+```text
+expense_group: 2건
+group_member: 5건
+receipts: 1건
+receipts.items[]: 2건
+payment: 5건
+```
+
+기존 `shared` 그룹은 `TOGETHER`, `ACTIVE`, `expected_member_count: 4`로 정규화한다. 총대 1명만 `registered`로 유지하고 나머지 멤버는 `guest`, `user_id: null`로 저장한다. 기존 `TOGETHER` 그룹은 `WAITING`, `expected_member_count: 4`, `activated_at: null` 상태로 정규화한다. 두 그룹 모두 `member_ids[]`를 저장하지 않는다.
+
+현재 Atlas에 존재하지 않고 세부 정책도 확정되지 않은 `invite`와 `guest_session`은 Seed에 포함하지 않는다. 영수증의 `participant_member_ids[]` 역시 저장 여부가 확정되지 않았으므로 추가하지 않고, 현재 정의된 `items[].consumer_member_ids[]`만 사용한다.
+
 Seed 미리보기는 DB에 연결하거나 데이터를 변경하지 않는다.
 
 ```text

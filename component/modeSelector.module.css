@@ -13,10 +13,14 @@
 }
 
 .brand {
+  padding: 0;
+  border: 0;
   color: var(--primary);
+  background: transparent;
   font-size: 1.5rem;
   font-weight: 800;
   letter-spacing: -0.04em;
+  cursor: pointer;
 }
 
 .captain {
@@ -39,6 +43,253 @@
   width: min(860px, calc(100% - 32px));
   margin: 0 auto;
   padding: 56px 0 80px;
+}
+
+.dashboardMain {
+  width: min(1040px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 58px 0 80px;
+}
+
+.dashboardHero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 28px;
+}
+
+.dashboardHero h1 {
+  margin: 0;
+  font-size: clamp(2rem, 5vw, 2.8rem);
+  letter-spacing: -0.05em;
+}
+
+.dashboardHero > div > p:last-child {
+  margin: 12px 0 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.newGroupButton {
+  min-height: 50px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 12px;
+  color: #ffffff;
+  background: var(--primary);
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.newGroupButton:hover {
+  background: var(--primary-dark);
+}
+
+.dashboardStats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 34px 0 0;
+}
+
+.dashboardStats > div {
+  padding: 20px;
+  border: 1px solid #d9dff1;
+  border-radius: 15px;
+  background: var(--surface);
+  box-shadow: 0 6px 18px rgba(42, 53, 105, 0.045);
+}
+
+.dashboardStats dt {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.dashboardStats dd {
+  margin: 10px 0 0;
+  color: var(--primary-dark);
+  font-size: 1.25rem;
+  font-weight: 850;
+}
+
+.dashboardSection {
+  margin-top: 38px;
+}
+
+.sectionHeadingRow {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 15px;
+}
+
+.sectionHeadingRow h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  letter-spacing: -0.025em;
+}
+
+.sectionHeadingRow > span {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.draftCard,
+.savedGroupCard {
+  width: 100%;
+  border: 1px solid #d8def2;
+  color: var(--foreground);
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+}
+
+.draftCard {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 17px;
+  min-height: 94px;
+  padding: 18px 20px;
+  border-color: #bfc8f4;
+  border-radius: 16px;
+  background: #f7f8ff;
+}
+
+.draftStep {
+  padding: 8px 10px;
+  border-radius: 9px;
+  color: var(--primary-dark);
+  background: #e7ebff;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.draftContent,
+.groupCardMain,
+.groupCardTotal {
+  display: grid;
+  gap: 6px;
+}
+
+.draftContent small,
+.groupCardMain small,
+.groupCardTotal small {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.savedGroupList {
+  display: grid;
+  gap: 11px;
+}
+
+.savedGroupCard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 22px;
+  min-height: 112px;
+  padding: 20px 22px;
+  border-radius: 17px;
+  box-shadow: 0 6px 18px rgba(42, 53, 105, 0.045);
+}
+
+.draftCard:hover,
+.savedGroupCard:hover {
+  border-color: #a8b4ee;
+  background: #f7f8ff;
+}
+
+.groupCardMain > strong {
+  font-size: 1.06rem;
+}
+
+.groupModeBadge {
+  width: fit-content;
+  padding: 5px 8px;
+  border-radius: 999px;
+  color: var(--primary-dark);
+  background: #ebeeff;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.groupCardTotal {
+  justify-items: end;
+  text-align: right;
+}
+
+.groupCardTotal strong {
+  font-size: 1.05rem;
+}
+
+.cardArrow {
+  color: #8893c4;
+  font-size: 1.2rem;
+  font-weight: 900;
+}
+
+.emptyDashboard {
+  display: grid;
+  min-height: 210px;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  padding: 28px;
+  border: 1px dashed #c7cfe9;
+  border-radius: 17px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.55);
+  text-align: center;
+}
+
+.emptyDashboard > span {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  margin-bottom: 4px;
+  place-items: center;
+  border-radius: 50%;
+  color: #ffffff;
+  background: var(--primary);
+  font-size: 1.25rem;
+}
+
+.emptyDashboard strong {
+  color: var(--foreground);
+}
+
+.emptyDashboard p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.creationNavigation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 26px;
+}
+
+.creationNavigation button {
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 10px;
+  color: var(--primary-dark);
+  background: #e9edff;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.creationNavigation span {
+  color: var(--muted);
+  font-size: 0.82rem;
 }
 
 .stepper {
@@ -166,10 +417,18 @@
 }
 
 .modeButton:focus-visible,
+.brand:focus-visible,
+.newGroupButton:focus-visible,
+.draftCard:focus-visible,
+.savedGroupCard:focus-visible,
+.creationNavigation button:focus-visible,
 .primaryButton:focus-visible,
 .secondaryButton:focus-visible,
 .addButton:focus-visible,
 .removeButton:focus-visible,
+.countControl button:focus-visible,
+.joinButton:focus-visible,
+.joinRemoveButton:focus-visible,
 .textInput:focus-visible {
   outline: 3px solid rgba(83, 102, 236, 0.3);
   outline-offset: 3px;
@@ -365,6 +624,13 @@
   margin: 0;
 }
 
+.fieldHint {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
 .addButton {
   padding: 8px 11px;
   color: var(--primary-dark);
@@ -387,6 +653,191 @@
   padding: 0 14px;
   color: #8a3a3a;
   background: #fff0f0;
+}
+
+.countControl {
+  display: grid;
+  grid-template-columns: 38px minmax(64px, auto) 38px;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid #cfd5e8;
+  border-radius: 11px;
+  background: #ffffff;
+}
+
+.countControl button {
+  width: 38px;
+  height: 40px;
+  border: 0;
+  color: var(--primary-dark);
+  background: #f0f3ff;
+  font-size: 1.1rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.countControl button:disabled {
+  color: #afb4c6;
+  background: #f5f6f9;
+  cursor: not-allowed;
+}
+
+.countControl strong {
+  padding: 0 9px;
+  text-align: center;
+}
+
+.mockJoinForm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.joinButton {
+  min-height: 48px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 10px;
+  color: #ffffff;
+  background: var(--primary);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.joinButton:disabled {
+  color: #8d93a7;
+  background: #e9ebf1;
+  cursor: not-allowed;
+}
+
+.mockInviteNote {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.joinStatus {
+  margin-top: 28px;
+  padding: 19px;
+  border: 1px solid #d8def2;
+  border-radius: 15px;
+  background: #f8f9fd;
+}
+
+.joinProgressHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.joinProgressHeading span {
+  color: var(--primary-dark);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.joinStatus progress {
+  width: 100%;
+  height: 8px;
+  margin: 14px 0 17px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  background: #e3e7f3;
+  appearance: none;
+}
+
+.joinStatus progress::-webkit-progress-bar {
+  border-radius: 999px;
+  background: #e3e7f3;
+}
+
+.joinStatus progress::-webkit-progress-value {
+  border-radius: 999px;
+  background: var(--primary);
+}
+
+.joinStatus progress::-moz-progress-bar {
+  border-radius: 999px;
+  background: var(--primary);
+}
+
+.joinedMemberList {
+  display: grid;
+  gap: 8px;
+}
+
+.joinedMemberRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 11px;
+  min-height: 56px;
+  padding: 8px 10px;
+  border: 1px solid #e2e6f2;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.joinedMemberRow > span:nth-child(2) {
+  display: grid;
+  gap: 2px;
+}
+
+.joinedMemberRow small {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.joinedMemberRow b {
+  color: #2e866f;
+  font-size: 0.78rem;
+}
+
+.joinAvatar {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 50%;
+  color: #35439b;
+  background: #eef0ff;
+  font-size: 0.68rem;
+  font-weight: 850;
+}
+
+.joinedAvatar {
+  color: #ffffff;
+  background: var(--primary-dark);
+  box-shadow: 0 0 0 2px var(--primary);
+}
+
+.joinRemoveButton {
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  color: #9d4452;
+  background: #fff0f2;
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.waitingMemberRow {
+  border-style: dashed;
+  color: #8c93a8;
+  background: #fafbfc;
+}
+
+.waitingMemberRow .joinAvatar {
+  color: #9096a9;
+  background: #eceef3;
+}
+
+.waitingMemberRow b {
+  color: #8c93a8;
 }
 
 .summary {
@@ -497,6 +948,78 @@
     padding: 34px 0 52px;
   }
 
+  .dashboardMain {
+    width: min(100% - 24px, 520px);
+    padding: 36px 0 56px;
+  }
+
+  .dashboardHero {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .newGroupButton {
+    width: 100%;
+  }
+
+  .dashboardStats {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin-top: 24px;
+  }
+
+  .dashboardStats > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 15px 17px;
+  }
+
+  .dashboardStats dd {
+    margin: 0;
+    font-size: 1.05rem;
+  }
+
+  .draftCard {
+    grid-template-columns: 1fr auto;
+  }
+
+  .draftStep {
+    width: fit-content;
+  }
+
+  .draftContent {
+    grid-column: 1;
+  }
+
+  .draftCard .cardArrow {
+    grid-column: 2;
+    grid-row: 1 / 3;
+  }
+
+  .savedGroupCard {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    padding: 18px;
+  }
+
+  .groupCardTotal {
+    grid-column: 1;
+    justify-items: start;
+    text-align: left;
+  }
+
+  .savedGroupCard .cardArrow {
+    grid-column: 2;
+    grid-row: 1 / 3;
+  }
+
+  .creationNavigation {
+    align-items: flex-start;
+    flex-direction: column;
+    margin-bottom: 22px;
+  }
+
   .stepper li {
     font-size: 0.78rem;
   }
@@ -526,5 +1049,31 @@
 
   .summary > div {
     grid-template-columns: 90px minmax(0, 1fr);
+  }
+
+  .sectionHeading {
+    align-items: flex-start;
+  }
+
+  .mockJoinForm {
+    grid-template-columns: 1fr;
+  }
+
+  .joinedMemberRow {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .joinedMemberRow > b {
+    grid-column: 2;
+    font-size: 0.74rem;
+  }
+
+  .joinedMemberRow .joinRemoveButton {
+    grid-column: 3;
+    grid-row: 1 / 3;
+  }
+
+  .waitingMemberRow > b {
+    grid-column: 2 / 4;
   }
 }

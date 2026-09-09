@@ -4,6 +4,29 @@
   padding: 58px 0 80px;
 }
 
+.boardNavigation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 26px;
+}
+
+.boardNavigation button {
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 10px;
+  color: var(--primary-dark);
+  background: #e9edff;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.boardNavigation span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
 .boardIntro,
 .memberStrip,
 .listHeading,
@@ -1161,6 +1184,13 @@
   font-size: 0.85rem;
 }
 
+.payerChoiceGroup {
+  padding: 16px;
+  border: 1px solid #d8def2;
+  border-radius: 12px;
+  background: #f7f8fc;
+}
+
 .memberChoices {
   display: flex;
   flex-wrap: wrap;
@@ -1362,6 +1392,7 @@
 
 .receiptRow:focus-visible,
 .addReceiptRow:focus-visible,
+.boardNavigation button:focus-visible,
 .backButton:focus-visible,
 .secondaryButton:focus-visible,
 .closeButton:focus-visible,
@@ -1386,6 +1417,12 @@
   .boardMain {
     width: min(100% - 24px, 520px);
     padding: 36px 0 56px;
+  }
+
+  .boardNavigation {
+    align-items: flex-start;
+    flex-direction: column;
+    margin-bottom: 22px;
   }
 
   .boardIntro {

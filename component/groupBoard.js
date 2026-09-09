@@ -304,7 +304,12 @@ function ReceiptEntryDialog({
   const defaultMemberIds = group.members.map((member) => member.id);
   const initialMemberIds =
     initialReceipt?.participant_member_ids ?? defaultMemberIds;
+  const defaultPayer =
+    findMember(group, initialReceipt?.paid_by_member_id) ??
+    findMember(group, currentMemberId) ??
+    group.members[0];
   const [title, setTitle] = useState(initialReceipt?.title ?? "");
+  const [paidByMemberId, setPaidByMemberId] = useState(defaultPayer.id);
   const [participantMemberIds, setParticipantMemberIds] = useState(
     () => initialMemberIds,
   );
@@ -319,10 +324,7 @@ function ReceiptEntryDialog({
   const selectedDescription = RECEIPT_METHODS.find(
     (method) => method.id === selectedMethod,
   )?.description;
-  const payer =
-    group.members.find((member) => member.member_type === "registered") ??
-    findMember(group, currentMemberId) ??
-    group.members[0];
+  const payer = findMember(group, paidByMemberId) ?? defaultPayer;
   const participantMembers = group.members.filter((member) =>
     participantMemberIds.includes(member.id),
   );
@@ -568,11 +570,44 @@ function ReceiptEntryDialog({
               />
             </label>
 
-            <div className={styles.fixedPayer}>
-              <span>결제자</span>
-              <strong>{payer.nickname}</strong>
-              <small>혼자하기에서는 총대가 결제자로 고정돼요.</small>
-            </div>
+            {group.mode === "TOGETHER" ? (
+              <fieldset className={`${styles.choiceGroup} ${styles.payerChoiceGroup}`}>
+                <legend>실제 결제자</legend>
+                <p>이 영수증의 금액을 먼저 결제한 사람을 골라 주세요.</p>
+                <div className={styles.memberChoices}>
+                  {group.members.map((member) => {
+                    const isSelected = member.id === payer.id;
+
+                    return (
+                      <label
+                        className={`${styles.memberChoice} ${
+                          isSelected ? styles.selectedChoice : ""
+                        }`}
+                        key={member.id}
+                      >
+                        <input
+                          type="radio"
+                          name="paid-by-member"
+                          value={member.id}
+                          checked={isSelected}
+                          onChange={() => {
+                            setPaidByMemberId(member.id);
+                            setValidationMessage("");
+                          }}
+                        />
+                        <span>{member.nickname}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </fieldset>
+            ) : (
+              <div className={styles.fixedPayer}>
+                <span>결제자</span>
+                <strong>{payer.nickname}</strong>
+                <small>혼자하기에서는 총대가 결제자로 고정돼요.</small>
+              </div>
+            )}
 
             <fieldset className={styles.choiceGroup}>
               <legend>영수증 참여자</legend>
@@ -1425,7 +1460,7 @@ function ReceiptDetail({
   );
 }
 
-export default function GroupBoard({ currentMemberId, group }) {
+export default function GroupBoard({ currentMemberId, group, onBack }) {
   const [isReceiptDialogOpen, setIsReceiptDialogOpen] = useState(false);
   const [selectedReceiptId, setSelectedReceiptId] = useState(null);
   const readReceiptSnapshot = useCallback(
@@ -1442,19 +1477,36 @@ export default function GroupBoard({ currentMemberId, group }) {
     (receipt) => receipt.id === selectedReceiptId,
   );
 
+  function showReceipt(receiptId) {
+    setSelectedReceiptId(receiptId);
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }
+
+  function showReceiptList() {
+    setSelectedReceiptId(null);
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }
+
   return (
     <main className={styles.boardMain}>
+      <nav className={styles.boardNavigation} aria-label="모임 화면 탐색">
+        <button type="button" onClick={onBack}>← 대시보드</button>
+        <span>
+          {group.mode === "TOGETHER" ? "함께하기" : "혼자하기"} · 총대 계정에 저장됨
+        </span>
+      </nav>
+
       {selectedReceipt ? (
         <ReceiptDetail
           currentMemberId={currentMemberId}
           group={group}
           receipt={selectedReceipt}
-          onBack={() => setSelectedReceiptId(null)}
+          onBack={showReceiptList}
           onDelete={(receiptId) => {
             const isRemoved = removeReceipt(group.id, receiptId);
 
             if (isRemoved) {
-              setSelectedReceiptId(null);
+              showReceiptList();
             }
 
             return isRemoved;
@@ -1467,7 +1519,7 @@ export default function GroupBoard({ currentMemberId, group }) {
           group={group}
           receipts={receipts}
           onAdd={() => setIsReceiptDialogOpen(true)}
-          onSelect={setSelectedReceiptId}
+          onSelect={showReceipt}
         />
       )}
 

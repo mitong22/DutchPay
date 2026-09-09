@@ -25,7 +25,7 @@ const MODES = [
     id: "TOGETHER",
     label: "함께하기",
     description: "여러 명이 각각 결제한 비용을 마지막에 함께 정산해요.",
-    detail: "테스트 참여자를 입장시켜 여러 결제자를 확인할 수 있어요.",
+    detail: "초대 링크를 열어 각자 별명으로 참여해요.",
   },
 ];
 
@@ -36,6 +36,7 @@ const EMPTY_DRAFT = {
   participantNames: [""],
   expectedMemberCount: 3,
   togetherParticipantNames: [],
+  inviteToken: null,
   completed: false,
 };
 
@@ -70,6 +71,8 @@ function parseDraft(snapshot) {
       togetherParticipantNames: Array.isArray(draft.togetherParticipantNames)
         ? draft.togetherParticipantNames
         : [],
+      inviteToken:
+        typeof draft.inviteToken === "string" ? draft.inviteToken : null,
     };
   } catch {
     return EMPTY_DRAFT;
@@ -244,6 +247,10 @@ function getSetupError(draft, captain) {
     return "목업 총대와 다른 참여자 별명을 입력해 주세요.";
   }
 
+  if (draft.mode === "TOGETHER" && !draft.inviteToken) {
+    return "초대 링크를 발급하고 참여자를 받아 주세요.";
+  }
+
   if (
     draft.mode === "TOGETHER" &&
     participantNames.length !== draft.expectedMemberCount - 1
@@ -252,6 +259,17 @@ function getSetupError(draft, captain) {
   }
 
   return "";
+}
+
+function getInviteUrl(inviteToken) {
+  if (!inviteToken || typeof window === "undefined") {
+    return "";
+  }
+
+  const url = new URL(window.location.pathname, window.location.origin);
+  url.searchParams.set("invite", inviteToken);
+
+  return url.toString();
 }
 
 function formatWon(amount) {
@@ -690,12 +708,13 @@ function CaptainRow({ captain, detail }) {
 }
 
 function TogetherMemberStep({ captain, draft }) {
-  const [inviteeName, setInviteeName] = useState("");
   const [validationMessage, setValidationMessage] = useState("");
+  const [copyMessage, setCopyMessage] = useState("");
   const joinedNames = normalizeNames(draft.togetherParticipantNames);
   const joinedCount = joinedNames.length + 1;
   const waitingCount = Math.max(draft.expectedMemberCount - joinedCount, 0);
   const isFull = joinedCount === draft.expectedMemberCount;
+  const inviteUrl = getInviteUrl(draft.inviteToken);
 
   function changeExpectedMemberCount(change) {
     const nextCount = Math.min(
@@ -704,40 +723,39 @@ function TogetherMemberStep({ captain, draft }) {
     );
 
     setValidationMessage("");
+    setCopyMessage("");
     saveDraft({
       expectedMemberCount: nextCount,
       togetherParticipantNames: draft.togetherParticipantNames.slice(0, nextCount - 1),
     });
   }
 
-  function joinParticipant(event) {
-    event.preventDefault();
-    const name = inviteeName.trim();
-    const comparableName = name.toLowerCase();
-    const existingNames = [captain.nickname, ...joinedNames].map((item) =>
-      item.trim().toLowerCase(),
-    );
-
-    if (!name) {
-      setValidationMessage("입장할 참여자의 별명을 입력해 주세요.");
-      return;
-    }
-
-    if (isFull) {
-      setValidationMessage("예정된 인원이 모두 입장했어요.");
-      return;
-    }
-
-    if (existingNames.includes(comparableName)) {
-      setValidationMessage("이미 사용 중인 별명이에요.");
+  function issueInvite() {
+    if (!draft.groupName.trim()) {
+      setValidationMessage("초대 전에 모임 이름을 입력해 주세요.");
       return;
     }
 
     saveDraft({
-      togetherParticipantNames: [...draft.togetherParticipantNames, name],
+      inviteToken: createId("invite"),
+      togetherParticipantNames: [],
     });
-    setInviteeName("");
     setValidationMessage("");
+    setCopyMessage("초대 링크가 발급됐어요.");
+  }
+
+  async function copyInviteLink() {
+    if (!inviteUrl || !navigator.clipboard) {
+      setCopyMessage("주소를 직접 선택해 복사해 주세요.");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      setCopyMessage("초대 링크를 복사했어요.");
+    } catch {
+      setCopyMessage("주소를 직접 선택해 복사해 주세요.");
+    }
   }
 
   function removeJoinedParticipant(index) {
@@ -765,7 +783,7 @@ function TogetherMemberStep({ captain, draft }) {
       <div className={styles.intro}>
         <p className={styles.eyebrow}>STEP 2 · 함께하기</p>
         <h1 id="create-heading">모두 입장하면 시작해요</h1>
-        <p>로그인 대신 테스트 참여자를 직접 입장시켜 흐름을 확인해요.</p>
+        <p>초대 링크를 보내고 모두 들어오면 모임을 시작할 수 있어요.</p>
       </div>
 
       <GroupNameField
@@ -801,31 +819,45 @@ function TogetherMemberStep({ captain, draft }) {
       </div>
 
       <div className={styles.formSection}>
-        <p className={styles.fieldLabel}>테스트 참여자 입장</p>
-        <form className={styles.mockJoinForm} onSubmit={joinParticipant}>
-          <label className={styles.visuallyHidden} htmlFor="mock-invitee-name">
-            입장할 참여자 별명
-          </label>
-          <input
-            className={styles.textInput}
-            id="mock-invitee-name"
-            type="text"
-            value={inviteeName}
-            maxLength={20}
-            disabled={isFull}
-            placeholder={isFull ? "모두 입장했어요" : "참여자 별명"}
-            onChange={(event) => {
-              setInviteeName(event.target.value);
-              setValidationMessage("");
-            }}
-          />
-          <button className={styles.joinButton} type="submit" disabled={isFull}>
-            입장시키기
+        <p className={styles.fieldLabel}>초대 링크</p>
+        {draft.inviteToken ? (
+          <div className={styles.inviteLinkPanel}>
+            <label className={styles.visuallyHidden} htmlFor="invite-link">
+              발급된 초대 링크
+            </label>
+            <input
+              className={styles.inviteLinkInput}
+              id="invite-link"
+              type="text"
+              value={inviteUrl}
+              readOnly
+              onFocus={(event) => event.currentTarget.select()}
+            />
+            <div className={styles.inviteLinkActions}>
+              <button
+                className={styles.joinButton}
+                type="button"
+                onClick={copyInviteLink}
+              >
+                링크 복사
+              </button>
+              <a href={inviteUrl} target="_blank" rel="noreferrer">
+                초대 화면 열기 ↗
+              </a>
+            </div>
+          </div>
+        ) : (
+          <button
+            className={styles.issueInviteButton}
+            type="button"
+            onClick={issueInvite}
+          >
+            초대 링크 발급
           </button>
-        </form>
-        <p className={styles.mockInviteNote}>
-          실제 초대 링크와 카카오톡 연결은 로그인 기능을 붙일 때 연결해요.
-        </p>
+        )}
+        {copyMessage && (
+          <p className={styles.inviteMessage} role="status">{copyMessage}</p>
+        )}
       </div>
 
       <div className={styles.joinStatus}>
@@ -847,7 +879,7 @@ function TogetherMemberStep({ captain, draft }) {
           {joinedNames.map((name, index) => (
             <div className={styles.joinedMemberRow} key={`${name}-${index}`}>
               <span className={styles.joinAvatar} aria-hidden="true">{name.slice(0, 2)}</span>
-              <span><strong>{name}</strong><small>테스트 참여자</small></span>
+              <span><strong>{name}</strong><small>초대 참여자</small></span>
               <b>✓ 참여 완료</b>
               <button
                 className={styles.joinRemoveButton}
@@ -885,6 +917,147 @@ function TogetherMemberStep({ captain, draft }) {
         </button>
       </div>
     </>
+  );
+}
+
+function InviteJoinScreen({ captain, draft, inviteToken }) {
+  const [nickname, setNickname] = useState("");
+  const [joinedNickname, setJoinedNickname] = useState("");
+  const [validationMessage, setValidationMessage] = useState("");
+  const joinedNames = normalizeNames(draft.togetherParticipantNames);
+  const joinedCount = joinedNames.length + 1;
+  const isValidInvite =
+    draft.mode === "TOGETHER" && draft.inviteToken === inviteToken;
+  const isFull = joinedCount >= draft.expectedMemberCount;
+
+  function leaveInvite() {
+    window.location.assign(window.location.pathname);
+  }
+
+  function joinGroup(event) {
+    event.preventDefault();
+    const name = nickname.trim();
+    const comparableName = name.toLowerCase();
+    const existingNames = [captain.nickname, ...joinedNames].map((item) =>
+      item.trim().toLowerCase(),
+    );
+
+    if (!name) {
+      setValidationMessage("사용할 별명을 입력해 주세요.");
+      return;
+    }
+
+    if (isFull) {
+      setValidationMessage("예정된 인원이 모두 참여했어요.");
+      return;
+    }
+
+    if (existingNames.includes(comparableName)) {
+      setValidationMessage("이미 사용 중인 별명이에요.");
+      return;
+    }
+
+    saveDraft({ togetherParticipantNames: [...joinedNames, name] });
+    setJoinedNickname(name);
+    setNickname("");
+    setValidationMessage("");
+  }
+
+  return (
+    <div className={styles.pageShell}>
+      <header className={styles.header}>
+        <button className={styles.brand} type="button" onClick={leaveInvite}>
+          몫대로
+        </button>
+        <span className={styles.inviteHeaderLabel}>초대 참여</span>
+      </header>
+
+      <main className={styles.inviteMain}>
+        <section className={`${styles.card} ${styles.inviteCard}`}>
+          {!isValidInvite ? (
+            <div className={styles.inviteState}>
+              <span aria-hidden="true">!</span>
+              <h1>초대 링크를 확인할 수 없어요</h1>
+              <p>총대에게 새 초대 링크를 받아 주세요.</p>
+              <button className={styles.secondaryButton} type="button" onClick={leaveInvite}>
+                메인으로
+              </button>
+            </div>
+          ) : draft.completed ? (
+            <div className={styles.inviteState}>
+              <span aria-hidden="true">✓</span>
+              <h1>이미 시작된 모임이에요</h1>
+              <p>총대에게 현재 모임 화면을 확인해 달라고 해 주세요.</p>
+              <button className={styles.secondaryButton} type="button" onClick={leaveInvite}>
+                메인으로
+              </button>
+            </div>
+          ) : joinedNickname ? (
+            <div className={styles.inviteState}>
+              <span aria-hidden="true">✓</span>
+              <p className={styles.eyebrow}>참여 완료</p>
+              <h1>{joinedNickname}님, 입장했어요</h1>
+              <p>총대가 모임을 시작할 때까지 이대로 기다려 주세요.</p>
+              <div className={styles.joinCountBadge}>
+                {joinedCount} / {draft.expectedMemberCount}명 참여 완료
+              </div>
+            </div>
+          ) : isFull ? (
+            <div className={styles.inviteState}>
+              <span aria-hidden="true">✓</span>
+              <h1>모두 참여했어요</h1>
+              <p>총대가 곧 모임을 시작할 수 있어요.</p>
+            </div>
+          ) : (
+            <>
+              <div className={styles.intro}>
+                <p className={styles.eyebrow}>모임 초대</p>
+                <h1>{draft.groupName}</h1>
+                <p>{captain.nickname}님이 함께 정산하자고 초대했어요.</p>
+              </div>
+
+              <dl className={styles.summary}>
+                <div>
+                  <dt>현재 참여</dt>
+                  <dd>{joinedCount} / {draft.expectedMemberCount}명</dd>
+                </div>
+                <div>
+                  <dt>총대</dt>
+                  <dd>{captain.nickname}</dd>
+                </div>
+              </dl>
+
+              <form className={styles.inviteJoinForm} onSubmit={joinGroup}>
+                <label className={styles.fieldLabel} htmlFor="invite-nickname">
+                  참여할 별명
+                </label>
+                <input
+                  className={styles.textInput}
+                  id="invite-nickname"
+                  type="text"
+                  value={nickname}
+                  maxLength={20}
+                  placeholder="별명을 입력해 주세요"
+                  autoComplete="nickname"
+                  onChange={(event) => {
+                    setNickname(event.target.value);
+                    setValidationMessage("");
+                  }}
+                />
+                {validationMessage && (
+                  <p className={styles.errorMessage} role="alert">
+                    {validationMessage}
+                  </p>
+                )}
+                <button className={styles.primaryButton} type="submit">
+                  초대 참여하기
+                </button>
+              </form>
+            </>
+          )}
+        </section>
+      </main>
+    </div>
   );
 }
 
@@ -931,7 +1104,7 @@ function ConfirmationStep({ captain, draft, onCreate }) {
   );
 }
 
-export default function ModeSelector({ captain }) {
+export default function ModeSelector({ captain, inviteToken = "" }) {
   const [screen, setScreen] = useState("dashboard");
   const [selectedGroupId, setSelectedGroupId] = useState(null);
   const draftSnapshot = useSyncExternalStore(
@@ -948,6 +1121,16 @@ export default function ModeSelector({ captain }) {
   const draft = parseDraft(draftSnapshot);
   const groups = parseGroups(groupsSnapshot);
   const selectedGroup = groups.find((group) => group.id === selectedGroupId);
+
+  if (inviteToken) {
+    return (
+      <InviteJoinScreen
+        captain={captain}
+        draft={draft}
+        inviteToken={inviteToken}
+      />
+    );
+  }
 
   function showDashboard() {
     setScreen("dashboard");

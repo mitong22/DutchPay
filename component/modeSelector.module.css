@@ -39,6 +39,12 @@
   font-weight: 700;
 }
 
+.inviteHeaderLabel {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
 .main {
   width: min(860px, calc(100% - 32px));
   margin: 0 auto;
@@ -483,6 +489,9 @@
 .removeButton:focus-visible,
 .countControl button:focus-visible,
 .joinButton:focus-visible,
+.issueInviteButton:focus-visible,
+.inviteLinkActions a:focus-visible,
+.inviteLinkInput:focus-visible,
 .joinRemoveButton:focus-visible,
 .textInput:focus-visible {
   outline: 3px solid rgba(83, 102, 236, 0.3);
@@ -742,13 +751,34 @@
   text-align: center;
 }
 
-.mockJoinForm {
+.inviteLinkPanel {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #d8def2;
+  border-radius: 13px;
+  background: #f8f9fd;
 }
 
-.joinButton {
+.inviteLinkInput {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid #cfd5e8;
+  border-radius: 9px;
+  color: #434a64;
+  background: #ffffff;
+}
+
+.inviteLinkActions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.joinButton,
+.issueInviteButton,
+.inviteLinkActions a {
   min-height: 48px;
   padding: 0 16px;
   border: 0;
@@ -759,17 +789,30 @@
   cursor: pointer;
 }
 
+.issueInviteButton {
+  width: 100%;
+}
+
+.inviteLinkActions a {
+  display: grid;
+  place-items: center;
+  border: 1px solid #cfd5e8;
+  color: var(--primary-dark);
+  background: #ffffff;
+  text-decoration: none;
+}
+
 .joinButton:disabled {
   color: #8d93a7;
   background: #e9ebf1;
   cursor: not-allowed;
 }
 
-.mockInviteNote {
-  margin: 8px 0 0;
-  color: var(--muted);
-  font-size: 0.78rem;
-  line-height: 1.45;
+.inviteMessage {
+  margin: 9px 0 0;
+  color: var(--primary-dark);
+  font-size: 0.84rem;
+  font-weight: 750;
 }
 
 .joinStatus {
@@ -893,6 +936,74 @@
 
 .waitingMemberRow b {
   color: #8c93a8;
+}
+
+.inviteMain {
+  width: min(560px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 72px 0 80px;
+}
+
+.inviteCard {
+  padding: 38px;
+}
+
+.inviteJoinForm {
+  display: grid;
+  gap: 12px;
+  margin-top: 26px;
+}
+
+.inviteJoinForm .fieldLabel,
+.inviteJoinForm .errorMessage {
+  margin: 0;
+}
+
+.inviteJoinForm .primaryButton {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.inviteState {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 18px 0;
+  text-align: center;
+}
+
+.inviteState > span:first-child {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 50%;
+  color: #ffffff;
+  background: var(--primary);
+  font-size: 1.1rem;
+  font-weight: 900;
+}
+
+.inviteState h1 {
+  margin: 0;
+  font-size: 1.8rem;
+  letter-spacing: -0.04em;
+}
+
+.inviteState p:not(.eyebrow) {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.joinCountBadge {
+  margin-top: 6px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  color: var(--primary-dark);
+  background: #edf0ff;
+  font-size: 0.88rem;
+  font-weight: 800;
 }
 
 .summary {
@@ -1086,8 +1197,22 @@
     align-items: flex-start;
   }
 
-  .mockJoinForm {
-    grid-template-columns: 1fr;
+  .inviteMain {
+    width: min(100% - 24px, 520px);
+    padding: 36px 0 56px;
+  }
+
+  .inviteCard {
+    padding: 28px 20px;
+  }
+
+  .inviteLinkActions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .inviteLinkActions > * {
+    width: 100%;
   }
 
   .joinedMemberRow {

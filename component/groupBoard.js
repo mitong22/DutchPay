@@ -1,15 +1,11 @@
 "use client";
 
-import Image from "next/image";
 import { useCallback, useState, useSyncExternalStore } from "react";
 
 import styles from "./groupBoard.module.css";
 
 const RECEIPT_STORE_EVENT = "dutchpay-receipt-store-change";
 const EMPTY_RECEIPTS_SNAPSHOT = "[]";
-const MAX_RECEIPT_IMAGE_BYTES = 20 * 1024 * 1024;
-const MAX_RECEIPT_IMAGE_SIDE = 1400;
-const RECEIPT_IMAGE_QUALITY = 0.78;
 const RECEIPT_METHODS = [
   {
     id: "manual",
@@ -27,68 +23,6 @@ const RECEIPT_METHODS = [
     description: "기기에 저장된 영수증 사진을 선택해요.",
   },
 ];
-
-function readFileAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-
-    reader.addEventListener("load", () => resolve(String(reader.result)));
-    reader.addEventListener("error", () =>
-      reject(new Error("사진을 읽지 못했어요.")),
-    );
-    reader.readAsDataURL(file);
-  });
-}
-
-function loadBrowserImage(source) {
-  return new Promise((resolve, reject) => {
-    const image = new window.Image();
-
-    image.addEventListener("load", () => resolve(image));
-    image.addEventListener("error", () =>
-      reject(new Error("사진 형식을 확인해 주세요.")),
-    );
-    image.src = source;
-  });
-}
-
-async function prepareReceiptImage(file) {
-  if (!file.type.startsWith("image/")) {
-    throw new Error("이미지 파일만 선택할 수 있어요.");
-  }
-
-  if (file.size > MAX_RECEIPT_IMAGE_BYTES) {
-    throw new Error("20MB 이하 사진을 선택해 주세요.");
-  }
-
-  const source = await readFileAsDataUrl(file);
-  const image = await loadBrowserImage(source);
-  const scale = Math.min(
-    1,
-    MAX_RECEIPT_IMAGE_SIDE / Math.max(image.naturalWidth, image.naturalHeight),
-  );
-  const width = Math.max(1, Math.round(image.naturalWidth * scale));
-  const height = Math.max(1, Math.round(image.naturalHeight * scale));
-  const canvas = document.createElement("canvas");
-  const context = canvas.getContext("2d");
-
-  if (!context) {
-    throw new Error("사진 미리보기를 만들지 못했어요.");
-  }
-
-  canvas.width = width;
-  canvas.height = height;
-  context.fillStyle = "#ffffff";
-  context.fillRect(0, 0, width, height);
-  context.drawImage(image, 0, 0, width, height);
-
-  return {
-    dataUrl: canvas.toDataURL("image/jpeg", RECEIPT_IMAGE_QUALITY),
-    height,
-    name: file.name || "영수증 사진",
-    width,
-  };
-}
 
 function getReceiptStoreKey(groupId) {
   return `dutchpay:receipts:${groupId}`;
@@ -366,14 +300,7 @@ function ReceiptEntryDialog({
   onSave,
 }) {
   const isEditing = Boolean(initialReceipt);
-  const initialMethod = String(
-    initialReceipt?.input_method ?? "manual",
-  ).toLowerCase();
-  const [selectedMethod, setSelectedMethod] = useState(
-    RECEIPT_METHODS.some((method) => method.id === initialMethod)
-      ? initialMethod
-      : "manual",
-  );
+  const [selectedMethod, setSelectedMethod] = useState("manual");
   const defaultMemberIds = group.members.map((member) => member.id);
   const initialMemberIds =
     initialReceipt?.participant_member_ids ?? defaultMemberIds;
@@ -393,18 +320,6 @@ function ReceiptEntryDialog({
         )
       : [createMenuDraft(initialMemberIds)],
   );
-  const [receiptImage, setReceiptImage] = useState(() =>
-    initialReceipt?.image_data_url
-      ? {
-          dataUrl: initialReceipt.image_data_url,
-          height: initialReceipt.image_height ?? 1200,
-          name: initialReceipt.image_name ?? "영수증 사진",
-          width: initialReceipt.image_width ?? 900,
-        }
-      : null,
-  );
-  const [isImageConfirmed, setIsImageConfirmed] = useState(isEditing);
-  const [isImagePreparing, setIsImagePreparing] = useState(false);
   const [validationMessage, setValidationMessage] = useState("");
   const selectedDescription = RECEIPT_METHODS.find(
     (method) => method.id === selectedMethod,
@@ -413,8 +328,6 @@ function ReceiptEntryDialog({
   const participantMembers = group.members.filter((member) =>
     participantMemberIds.includes(member.id),
   );
-  const shouldShowForm =
-    isEditing || selectedMethod === "manual" || isImageConfirmed;
   const draftTotal = items.reduce((total, item) => {
     const quantity = Number(item.quantity);
     const amount = Number(item.amount);
@@ -429,40 +342,8 @@ function ReceiptEntryDialog({
   }, 0);
 
   function selectMethod(methodId) {
-    if (methodId === selectedMethod) {
-      return;
-    }
-
     setSelectedMethod(methodId);
-    setReceiptImage(null);
-    setIsImageConfirmed(false);
     setValidationMessage("");
-  }
-
-  async function handleImageSelection(event) {
-    const input = event.currentTarget;
-    const file = input.files?.[0];
-
-    input.value = "";
-
-    if (!file) {
-      return;
-    }
-
-    setIsImagePreparing(true);
-    setValidationMessage("");
-
-    try {
-      setReceiptImage(await prepareReceiptImage(file));
-      setIsImageConfirmed(false);
-    } catch (error) {
-      setReceiptImage(null);
-      setValidationMessage(
-        error instanceof Error ? error.message : "사진을 불러오지 못했어요.",
-      );
-    } finally {
-      setIsImagePreparing(false);
-    }
   }
 
   function toggleReceiptParticipant(memberId) {
@@ -604,12 +485,7 @@ function ReceiptEntryDialog({
       participant_member_ids: participantMemberIds,
       items: normalizedItems,
       image_key: initialReceipt?.image_key ?? null,
-      image_data_url: receiptImage?.dataUrl ?? null,
-      image_height: receiptImage?.height ?? null,
-      image_name: receiptImage?.name ?? null,
-      image_width: receiptImage?.width ?? null,
-      input_method:
-        initialReceipt?.input_method ?? selectedMethod.toUpperCase(),
+      input_method: initialReceipt?.input_method ?? "MANUAL",
       ocr_status: initialReceipt?.ocr_status ?? "NONE",
       status: initialReceipt?.status ?? "ACTIVE",
       created_at: initialReceipt?.created_at ?? savedAt,
@@ -678,117 +554,8 @@ function ReceiptEntryDialog({
           </>
         )}
 
-        {!isEditing &&
-          selectedMethod !== "manual" &&
-          !isImageConfirmed && (
-            <section className={styles.photoMethod} aria-label="영수증 사진 준비">
-              <div className={styles.photoMethodHeading}>
-                <span aria-hidden="true">
-                  {selectedMethod === "camera" ? "⌁" : "↑"}
-                </span>
-                <div>
-                  <strong>
-                    {selectedMethod === "camera"
-                      ? "영수증을 화면에 맞춰 촬영해 주세요"
-                      : "저장된 영수증 사진을 골라 주세요"}
-                  </strong>
-                  <p>사진을 확인한 다음 내용을 직접 입력할 수 있어요.</p>
-                </div>
-              </div>
-
-              <label className={styles.photoSelectButton}>
-                <input
-                  className={styles.visuallyHidden}
-                  type="file"
-                  accept="image/*"
-                  capture={
-                    selectedMethod === "camera" ? "environment" : undefined
-                  }
-                  disabled={isImagePreparing}
-                  onChange={handleImageSelection}
-                />
-                {isImagePreparing
-                  ? "사진 준비 중..."
-                  : receiptImage
-                    ? selectedMethod === "camera"
-                      ? "다시 촬영하기"
-                      : "다른 사진 선택"
-                    : selectedMethod === "camera"
-                      ? "카메라 열기"
-                      : "사진 선택하기"}
-              </label>
-
-              {receiptImage && (
-                <figure className={styles.photoPreview}>
-                  <div className={styles.photoPreviewFrame}>
-                    <Image
-                      src={receiptImage.dataUrl}
-                      alt="선택한 영수증 사진 미리보기"
-                      width={receiptImage.width}
-                      height={receiptImage.height}
-                      unoptimized
-                    />
-                  </div>
-                  <figcaption>
-                    <strong>{receiptImage.name}</strong>
-                    <small>사진이 선명한지 확인해 주세요.</small>
-                  </figcaption>
-                </figure>
-              )}
-
-              {validationMessage && (
-                <p className={styles.validationMessage} role="alert">
-                  {validationMessage}
-                </p>
-              )}
-
-              {receiptImage && (
-                <button
-                  className={styles.usePhotoButton}
-                  type="button"
-                  onClick={() => setIsImageConfirmed(true)}
-                >
-                  이 사진 사용하기
-                </button>
-              )}
-            </section>
-          )}
-
-        {shouldShowForm && (
+        {isEditing || selectedMethod === "manual" ? (
           <form className={styles.manualForm} onSubmit={handleSubmit}>
-            {receiptImage && (
-              <div className={styles.attachedPhoto}>
-                <div className={styles.attachedPhotoThumbnail}>
-                  <Image
-                    src={receiptImage.dataUrl}
-                    alt="입력 중인 영수증 사진"
-                    width={receiptImage.width}
-                    height={receiptImage.height}
-                    unoptimized
-                  />
-                </div>
-                <span>
-                  <strong>영수증 사진 첨부됨</strong>
-                  <small>{receiptImage.name}</small>
-                </span>
-                {!isEditing && selectedMethod !== "manual" && (
-                  <button
-                    className={styles.secondaryButton}
-                    type="button"
-                    onClick={() => setIsImageConfirmed(false)}
-                  >
-                    사진 변경
-                  </button>
-                )}
-              </div>
-            )}
-
-            {receiptImage && (
-              <p className={styles.photoInputNotice}>
-                OCR 없이 사진을 보며 영수증 내용을 직접 입력해 주세요.
-              </p>
-            )}
-
             <label className={styles.formField}>
               <span>영수증 소제목</span>
               <input
@@ -1002,6 +769,34 @@ function ReceiptEntryDialog({
               </button>
             </div>
           </form>
+        ) : (
+          <section className={styles.photoMethod} aria-label="영수증 사진 선택">
+            <div className={styles.photoMethodHeading}>
+              <span aria-hidden="true">
+                {selectedMethod === "camera" ? "⌁" : "↑"}
+              </span>
+              <div>
+                <strong>
+                  {selectedMethod === "camera"
+                    ? "영수증을 촬영해 주세요"
+                    : "영수증 사진을 골라 주세요"}
+                </strong>
+                <p>선택 이후 처리는 OCR 기능에서 연결할 예정이에요.</p>
+              </div>
+            </div>
+
+            <label className={styles.photoSelectButton}>
+              <input
+                className={styles.visuallyHidden}
+                type="file"
+                accept="image/*"
+                capture={
+                  selectedMethod === "camera" ? "environment" : undefined
+                }
+              />
+              {selectedMethod === "camera" ? "카메라 열기" : "사진 선택하기"}
+            </label>
+          </section>
         )}
     </section>
   );
@@ -1418,35 +1213,6 @@ function ReceiptDetail({
         </div>
         <strong>{formatWon(receipt.total_amount)}</strong>
       </div>
-
-      {receipt.image_data_url && (
-        <details className={styles.receiptPhotoDisclosure}>
-          <summary>
-            <span>
-              <strong>영수증 사진</strong>
-              <small>
-                {receipt.input_method === "CAMERA"
-                  ? "촬영한 사진"
-                  : "첨부한 사진"}
-              </small>
-            </span>
-            <span className={styles.receiptPhotoAction}>
-              <span className={styles.closedPhotoLabel}>사진 보기</span>
-              <span className={styles.openPhotoLabel}>사진 접기</span>
-              <span aria-hidden="true">⌄</span>
-            </span>
-          </summary>
-          <div className={styles.receiptPhotoFrame}>
-            <Image
-              src={receipt.image_data_url}
-              alt={`${receipt.title} 영수증 사진`}
-              width={receipt.image_width ?? 900}
-              height={receipt.image_height ?? 1200}
-              unoptimized
-            />
-          </div>
-        </details>
-      )}
 
       <dl className={styles.receiptSummary}>
         <div>

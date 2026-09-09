@@ -1269,6 +1269,10 @@ _id
 name
 created_by
 mode
+status
+expected_member_count
+activated_at
+settlement_completed_at
 member_ids[]
 created_at
 ```
@@ -1279,16 +1283,19 @@ created_at
 
 `member_ids[]`에는 해당 모임에 속한 `group_member._id` 목록을 저장한다.
 
-현재 DB 정의서의 `mode` 값은 `shared`로 되어 있다.
-
-하지만 실제 서비스 요구사항에서는 다음 두 가지 모드가 필요하다.
+`mode`는 다음 두 값만 사용한다.
 
 ```text
 SOLO
 TOGETHER
 ```
 
-따라서 실제 구현 전에 `expense_group.mode`를 기존 `shared` 방식으로 유지할 것인지, `SOLO / TOGETHER` 방식으로 변경할 것인지 확정해야 한다.
+`status`는 `WAITING` 또는 `ACTIVE`를 사용한다. `SOLO`는 생성 즉시 `ACTIVE`이며,
+`TOGETHER`는 `expected_member_count`만큼 참여한 시점에 `WAITING`에서 `ACTIVE`로 바뀐다.
+`activated_at`은 활성화 전에는 `null`, 활성화된 순간의 시각은 `Date`로 저장한다.
+`settlement_completed_at`은 진행 중에는 `null`이며 총대가 정산 완료 버튼을 누른 시각을 저장한다.
+값이 생긴 뒤에는 영수증과 참여 내역을 조회만 할 수 있다.
+기존 `shared` 값은 더 이상 사용하지 않는다.
 
 
 ### group_member
@@ -1372,7 +1379,7 @@ total_amount
 → 영수증 전체 결제 금액
 
 paid_by_member_id
-→ 실제로 이 영수증 금액을 먼저 결제한 사람
+→ 현재 접속하여 이 영수증 금액을 결제한 사람
 
 uploaded_by_member_id
 → 이 영수증을 서비스에 등록한 사람
@@ -1381,17 +1388,21 @@ items[]
 → 영수증에 포함된 메뉴 목록
 ```
 
-`paid_by_member_id`와 `uploaded_by_member_id`는 서로 다를 수 있다.
-
-예를 들어 지현이 실제 결제했고 미연이 대신 영수증을 등록했다면 다음과 같이 표현할 수 있다.
+영수증은 다른 참여자 명의로 대신 등록할 수 없다.
+두 필드는 모두 서버에서 현재 접속한 `group_member._id`로 고정한다.
 
 ```text
 paid_by_member_id
-→ 지현
+→ 현재 참여자
 
 uploaded_by_member_id
-→ 미연
+→ 현재 참여자
 ```
+
+먹은 사람은 `items[].consumer_member_ids[]`로 저장하며 영수증 상세에서는 읽기 전용으로 보여준다.
+변경은 영수증 등록자가 수정 화면에서만 할 수 있다.
+모임 화면은 현재 참여자를 기본 선택하고 `paid_by_member_id`가 그 참여자인 영수증만 보여준다.
+다른 참여자 카드를 누르면 그 사람이 직접 결제·등록한 영수증 목록으로 전환한다.
 
 
 ### receipts.items[]
@@ -1806,12 +1817,12 @@ session.token
 ```
 
 
-### 현재 DB 정의와 서비스 기획 사이에서 추가로 필요한 부분
+### 초대와 비회원 세션
 
-현재 MongoDB 정의서에는 다음 두 컬렉션이 존재하지 않는다.
+초대와 비회원 세션은 다음 두 컬렉션으로 저장한다.
 
 ```text
-invite
+group_invite
 guest_session
 ```
 
@@ -1845,9 +1856,14 @@ HttpOnly Cookie 발급
 이후 요청마다 Guest Session 확인
 ```
 
-따라서 `invite`와 `guest_session`은 현재 DB에 이미 존재하는 컬렉션으로 취급하지 않는다.
+`group_invite`는 남은 참여자 수만큼 서로 다른 1회용 링크를 발급한다.
+주요 필드는 `_id`, `group_id`, `token_hash`, `used_at`, `used_by_member_id`,
+`revoked_at`, `created_at`, `expires_at`이다. 원문 토큰은 저장하지 않는다.
+한 링크는 첫 참여 성공 시 `used_at`과 `used_by_member_id`가 기록되어 다시 사용할 수 없다.
+링크를 재발급하면 아직 사용하지 않은 이전 링크는 `revoked_at`을 기록해 폐기한다.
 
-구현 전에 별도 컬렉션으로 추가할지 최종 정의가 필요하다.
+`guest_session`은 비회원 참여자의 세션 토큰 해시와 `group_member._id`를 연결하고,
+브라우저에는 HttpOnly Cookie만 발급한다.
 
 
 ### 현재 정의서에서 확정되지 않은 영수증 참여자
@@ -1891,17 +1907,15 @@ items[].consumer_member_ids[]의
 이 부분은 요구사항만으로 임의 결정하지 않는다.
 
 
-### 현재 정의서에서 확정되지 않은 모임 mode
+### 확정된 모임 mode와 상태
 
-현재 `expense_group.mode`의 DB 데이터는 `shared`를 기준으로 작성되어 있다.
-
-하지만 현재 서비스 기획에서는 다음 두 모드를 사용한다.
+`expense_group.mode`는 다음 두 값으로 확정한다.
 
 ```text
 SOLO
 TOGETHER
 ```
 
-따라서 구현 전 `expense_group.mode`의 실제 저장 값을 확정해야 한다.
-
-요구사항 확인 없이 `shared`를 임의로 `SOLO / TOGETHER`로 변경하지 않는다.
+`shared`는 사용하지 않는다. `SOLO`는 생성 즉시 `ACTIVE`, `TOGETHER`는 전체 인원이
+입장하기 전까지 `WAITING`으로 저장하며 활성화 시각을 `activated_at`에 기록한다.
+정산 완료 여부는 참여 상태와 분리하여 `settlement_completed_at`으로 관리하고 총대만 완료할 수 있다.

@@ -900,6 +900,134 @@ th {
   animation: spin 800ms linear infinite;
 }
 
+.invite-page {
+  display: grid;
+  min-height: 690px;
+  padding-block: 65px 85px;
+  place-items: center;
+}
+
+.invite-card {
+  display: grid;
+  width: min(100%, 590px);
+  gap: 24px;
+  padding: clamp(28px, 5vw, 46px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-large);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.invite-card--center {
+  justify-items: center;
+  text-align: center;
+}
+
+.invite-card--center h1,
+.invite-card--center p {
+  margin: 0;
+}
+
+.invite-card--center p {
+  max-width: 440px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.invite-card__heading {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+}
+
+.invite-card__heading h1 {
+  margin: 8px 0;
+  font-size: clamp(28px, 5vw, 39px);
+  letter-spacing: -0.05em;
+}
+
+.invite-card__heading p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.invite-card__icon {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  margin-bottom: 16px;
+  place-items: center;
+  border-radius: 19px;
+  background: var(--primary-soft);
+  font-size: 27px;
+}
+
+.invite-card__icon--muted {
+  color: var(--danger);
+  font-weight: 850;
+}
+
+.invite-summary {
+  display: grid;
+  padding: 15px 0;
+  border-block: 1px solid var(--line);
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.invite-summary > div {
+  display: grid;
+  gap: 5px;
+  padding: 3px 15px;
+  text-align: center;
+}
+
+.invite-summary > div + div {
+  border-left: 1px solid var(--line);
+}
+
+.invite-summary span,
+.returning-member > span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.invite-summary strong {
+  font-size: 14px;
+}
+
+.invite-form {
+  display: grid;
+  gap: 18px;
+}
+
+.returning-member {
+  display: grid;
+  gap: 4px;
+  padding: 17px;
+  border-radius: 12px;
+  background: var(--surface-soft);
+  text-align: center;
+}
+
+.returning-member strong {
+  font-size: 20px;
+}
+
+.returning-member p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.security-note {
+  margin: -5px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+  text-align: center;
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -1012,5 +1140,19 @@ th {
   .invite-result-row code {
     grid-column: 1 / -1;
     grid-row: 2;
+  }
+
+  .invite-page {
+    min-height: 620px;
+    padding-block: 32px 55px;
+  }
+
+  .invite-card {
+    padding: 28px 20px;
+    border-radius: 19px;
+  }
+
+  .invite-summary > div {
+    padding-inline: 5px;
   }
 }

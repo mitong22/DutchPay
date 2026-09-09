@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --test",
+    "seed:preview": "node scripts/seeds.js --preview",
+    "seed:write": "node --env-file=.env.local scripts/seeds.js --write"
   },
   "dependencies": {
     "@better-auth/mongo-adapter": "^1.7.3",

@@ -1269,26 +1269,50 @@ _id
 name
 created_by
 mode
-member_ids[]
+status
+expected_member_count
+activated_at
 created_at
+updated_at
 ```
 
 `_id`는 UUID 문자열을 사용한다.
 
-`created_by`는 해당 모임을 생성한 Better Auth 사용자의 `user._id`를 참조한다.
+`created_by`는 해당 모임을 생성한 Better Auth 사용자의 `user._id`를 문자열로 변환하여 저장한다. Better Auth가 관리하는 `user._id` 자체는 변경하지 않는다.
 
-`member_ids[]`에는 해당 모임에 속한 `group_member._id` 목록을 저장한다.
+모임에 속한 멤버는 `expense_group.member_ids[]`에 중복 저장하지 않는다. `group_member.group_id`를 단일 기준으로 조회한다.
 
-현재 DB 정의서의 `mode` 값은 `shared`로 되어 있다.
-
-하지만 실제 서비스 요구사항에서는 다음 두 가지 모드가 필요하다.
+`mode`는 다음 두 값만 허용한다.
 
 ```text
 SOLO
 TOGETHER
 ```
 
-따라서 실제 구현 전에 `expense_group.mode`를 기존 `shared` 방식으로 유지할 것인지, `SOLO / TOGETHER` 방식으로 변경할 것인지 확정해야 한다.
+`shared`는 신규 데이터에 사용하지 않는다. 기존 `shared` Seed 데이터는 공동 참여 모임이므로 `TOGETHER`로 마이그레이션한다.
+
+`status`는 다음 두 값만 허용한다.
+
+```text
+WAITING
+ACTIVE
+```
+
+`expected_member_count`는 총대를 포함한 전체 참여 예정 인원이다. 실제 참여 인원은 별도 숫자로 중복 저장하지 않고 `group_member.group_id`를 기준으로 계산한다.
+
+`SOLO`는 생성 즉시 `ACTIVE`이며 `activated_at`에는 생성 시각을 저장한다. `TOGETHER`는 `WAITING`으로 생성하고 모든 참여자가 입장했을 때 서버가 `ACTIVE`로 변경하면서 `activated_at`을 기록한다.
+
+기존 `shared` Seed 데이터는 이미 사용 가능한 모임이므로 다음 기준으로 전환한다.
+
+```text
+mode: shared → TOGETHER
+status: 없음 → ACTIVE
+expected_member_count: 없음 → 실제 group_member 수
+activated_at: 없음 → 기존 created_at
+created_by: ObjectId → 같은 ID 값의 문자열
+```
+
+기존 그룹의 `group_member._id`는 유지한다. 총대와 연결된 멤버 1명만 `registered`로 유지하고 해당 `user_id`는 같은 Better Auth 사용자 ID의 문자열로 변환한다. 총대가 아닌 멤버는 `guest`, `user_id: null`로 변경한다.
 
 
 ### group_member
@@ -1309,7 +1333,7 @@ member_type
 
 `group_id`는 `expense_group._id`를 참조한다.
 
-`user_id`는 Better Auth 사용자와 연결되는 경우 `user._id`를 저장하고, 비회원 참여자는 `null`이 될 수 있다.
+`user_id`는 Better Auth 사용자와 연결되는 경우 `user._id`를 문자열로 변환하여 저장하고, 비회원 참여자는 `null`로 저장한다. Better Auth 관리 컬렉션 내부의 ObjectId는 변경하지 않는다.
 
 `member_type`은 다음 값을 사용한다.
 
@@ -1891,20 +1915,54 @@ items[].consumer_member_ids[]의
 이 부분은 요구사항만으로 임의 결정하지 않는다.
 
 
-### 현재 정의서에서 확정되지 않은 모임 mode
+### 확정된 모임 mode와 기존 `shared` 데이터 처리
 
-현재 `expense_group.mode`의 DB 데이터는 `shared`를 기준으로 작성되어 있다.
-
-하지만 현재 서비스 기획에서는 다음 두 모드를 사용한다.
+`expense_group.mode`는 다음 두 값으로 확정한다.
 
 ```text
 SOLO
 TOGETHER
 ```
 
-따라서 구현 전 `expense_group.mode`의 실제 저장 값을 확정해야 한다.
+기존 `shared` 값은 `TOGETHER`로 전환하며, 신규 데이터에는 저장하지 않는다. 소문자 `solo`, `together`나 그 밖의 문자열도 허용하지 않는다.
 
-요구사항 확인 없이 `shared`를 임의로 `SOLO / TOGETHER`로 변경하지 않는다.
+모드별 초기 상태는 다음과 같다.
+
+```text
+SOLO
+→ 생성 즉시 ACTIVE
+→ 총대가 참여자를 직접 입력
+→ Invite를 생성하지 않음
+
+TOGETHER
+→ 총대를 포함한 전체 예정 인원을 입력
+→ WAITING으로 생성
+→ 총대를 제외한 인원 수만큼 Invite 슬롯을 사용
+→ 실제 참여 인원이 예정 인원과 같아지면 ACTIVE
+```
+
+상태 전환은 클라이언트가 요청한 값을 그대로 저장하지 않고 서버에서 실제 참여 인원을 다시 확인한 뒤 수행한다. `TOGETHER`의 실제 참여 인원이 예정 인원을 초과하는 상태는 허용하지 않는다.
+
+개발용 Seed는 `/scripts/seeds.js`에서만 관리한다. Seed는 실제 Better Auth 사용자 문서를 생성하거나 수정하지 않고, `SEED_OWNER_EMAIL`로 조회한 기존 개발 사용자의 문자열 ID만 `created_by`와 총대 멤버의 `user_id`에 사용한다.
+
+Seed 미리보기는 DB에 연결하거나 데이터를 변경하지 않는다.
+
+```text
+npm run seed:preview
+```
+
+실제 개발 DB에 Seed를 쓸 때는 `.env.local`에 다음 값이 있어야 하며 `--write` 모드와 명시적인 허용 값이 함께 필요하다.
+
+```text
+MONGODB_URI
+MONGODB_DB
+SEED_OWNER_EMAIL
+ALLOW_DATABASE_SEED=true
+```
+
+```text
+npm run seed:write
+```
 
 
 ## 초대링크 제약사항

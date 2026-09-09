@@ -759,11 +759,14 @@ function ReceiptDetail({
   const [isDeleteConfirming, setIsDeleteConfirming] = useState(false);
   const [actionMessage, setActionMessage] = useState("");
   const payer = findMember(group, receipt.paid_by_member_id);
-  const participantNames = getMemberNames(
-    group,
-    receipt.participant_member_ids,
-  );
+  const participantMembers = (receipt.participant_member_ids ?? [])
+    .map((memberId) => findMember(group, memberId))
+    .filter(Boolean);
   const receiptShares = calculateReceiptShares(receipt);
+  const currentMemberTotal =
+    receiptShares.memberTotals.find(
+      (share) => share.memberId === currentMemberId,
+    )?.amount ?? 0;
 
   if (isEditing) {
     return (
@@ -831,103 +834,254 @@ function ReceiptDetail({
 
       <dl className={styles.receiptSummary}>
         <div>
-          <dt>결제자</dt>
-          <dd>{payer?.nickname ?? "미정"}</dd>
+          <dt>결제한 사람</dt>
+          <dd className={styles.payerProfile}>
+            <span
+              className={`${styles.detailAvatar} ${
+                payer?.member_type === "registered"
+                  ? styles.captainDetailAvatar
+                  : ""
+              } ${
+                payer?.id === currentMemberId
+                  ? styles.currentDetailAvatar
+                  : ""
+              }`}
+              aria-hidden="true"
+            >
+              {payer?.nickname.slice(0, 2) ?? "?"}
+            </span>
+            <span>
+              <strong>{payer?.nickname ?? "미정"}</strong>
+              {payer && (
+                <small>
+                  {payer.member_type === "registered" ? "총대" : "참여자"}
+                  {payer.id === currentMemberId ? " · 나" : ""}
+                </small>
+              )}
+            </span>
+          </dd>
         </div>
         <div>
-          <dt>영수증 참여자</dt>
-          <dd>{participantNames.join(" · ") || "미정"}</dd>
+          <dt>함께한 사람 {participantMembers.length}명</dt>
+          <dd className={styles.participantProfiles}>
+            {participantMembers.length > 0 ? (
+              participantMembers.map((member) => {
+                const isCaptain = member.member_type === "registered";
+                const isCurrentMember = member.id === currentMemberId;
+
+                return (
+                  <span
+                    className={styles.participantProfile}
+                    key={member.id}
+                    aria-label={`${member.nickname}${
+                      isCaptain ? " 총대" : ""
+                    }${isCurrentMember ? " 현재 사용자" : ""}`}
+                  >
+                    <span
+                      className={`${styles.detailAvatar} ${
+                        isCaptain ? styles.captainDetailAvatar : ""
+                      } ${
+                        isCurrentMember ? styles.currentDetailAvatar : ""
+                      }`}
+                      aria-hidden="true"
+                    >
+                      {member.nickname.slice(0, 2)}
+                    </span>
+                    <span>{member.nickname}</span>
+                  </span>
+                );
+              })
+            ) : (
+              <span className={styles.emptyPeople}>참여자 미정</span>
+            )}
+          </dd>
         </div>
       </dl>
 
       <div className={styles.itemHeading}>
-        <h2>메뉴와 부담할 사람</h2>
+        <div>
+          <h2>누가 무엇을 먹었나요?</h2>
+          <p>메뉴마다 함께 먹은 사람을 확인해요.</p>
+        </div>
         <p>{receipt.items?.length ?? 0}개 메뉴</p>
       </div>
 
       <div className={styles.itemList}>
         {(receipt.items ?? []).map((item) => {
-          const consumerNames = getMemberNames(
-            group,
-            item.consumer_member_ids,
-          );
-          const itemShares = receiptShares.itemShares.get(item.id) ?? [];
+          const consumerMembers = (item.consumer_member_ids ?? [])
+            .map((memberId) => findMember(group, memberId))
+            .filter(Boolean);
 
           return (
             <article className={styles.itemRow} key={item.id}>
-              <div>
-                <strong>{item.name}</strong>
-                <p>
-                  {consumerNames.join(" · ") || "부담할 사람 미정"} · 수량{" "}
-                  {item.quantity ?? 1}개
-                </p>
+              <div className={styles.itemOverview}>
+                <div>
+                  <strong>{item.name}</strong>
+                  <span>수량 {item.quantity ?? 1}개</span>
+                </div>
+                <strong>{formatWon(item.line_total ?? item.amount)}</strong>
               </div>
-              <strong>{formatWon(item.line_total ?? item.amount)}</strong>
-              <div
-                className={styles.itemShareList}
-                aria-label={`${item.name} 메뉴 분담액`}
-              >
-                {itemShares.map((share) => {
-                  const member = findMember(group, share.memberId);
 
-                  return (
-                    <span className={styles.itemShare} key={share.memberId}>
-                      <span>{member?.nickname ?? "알 수 없음"}</span>
-                      <strong>{formatWon(share.amount)}</strong>
-                    </span>
-                  );
-                })}
+              <div className={styles.itemConsumers}>
+                <span className={styles.itemConsumerLabel}>
+                  먹은 사람 {consumerMembers.length}명
+                </span>
+                <div
+                  className={styles.selectedMembers}
+                  aria-label={`${item.name} 먹은 사람`}
+                >
+                  {consumerMembers.length > 0 ? (
+                    consumerMembers.map((member) => {
+                      const isCaptain = member.member_type === "registered";
+                      const isCurrentMember = member.id === currentMemberId;
+
+                      return (
+                        <span
+                          className={`${styles.selectedMember} ${
+                            isCurrentMember ? styles.currentSelectedMember : ""
+                          }`}
+                          key={member.id}
+                        >
+                          <span
+                            className={`${styles.selectedAvatar} ${
+                              isCaptain ? styles.captainSelectedAvatar : ""
+                            } ${
+                              isCurrentMember
+                                ? styles.currentSelectedAvatar
+                                : ""
+                            }`}
+                            aria-hidden="true"
+                          >
+                            {member.nickname.slice(0, 2)}
+                          </span>
+                          <span>{member.nickname}</span>
+                          <span className={styles.selectedCheck} aria-hidden="true">
+                            ✓
+                          </span>
+                        </span>
+                      );
+                    })
+                  ) : (
+                    <span className={styles.emptyPeople}>선택된 사람 없음</span>
+                  )}
+                </div>
               </div>
             </article>
           );
         })}
       </div>
 
-      <section
-        className={styles.shareSummary}
-        aria-labelledby="receipt-share-title"
-      >
-        <div className={styles.shareSummaryHeading}>
-          <div>
-            <h2 id="receipt-share-title">이번 영수증 부담액</h2>
-            <p>각 사람이 참여한 메뉴의 분담액을 더했어요.</p>
-          </div>
-          <strong>{formatWon(receipt.total_amount)}</strong>
-        </div>
+      <details className={styles.shareDisclosure}>
+        <summary className={styles.shareDisclosureSummary}>
+          <span className={styles.mySharePreview}>
+            <small>내가 낼 금액</small>
+            <strong>{formatWon(currentMemberTotal)}</strong>
+          </span>
+          <span className={styles.receiptTotalPreview}>
+            <small>영수증 전체</small>
+            <strong>{formatWon(receipt.total_amount)}</strong>
+          </span>
+          <span className={styles.shareDisclosureAction}>
+            <span className={styles.closedDisclosureLabel}>상세보기</span>
+            <span className={styles.openDisclosureLabel}>접기</span>
+            <span className={styles.disclosureChevron} aria-hidden="true">
+              ⌄
+            </span>
+          </span>
+        </summary>
 
-        <div className={styles.shareTotalList}>
-          {receiptShares.memberTotals.map((share) => {
-            const member = findMember(group, share.memberId);
-            const isCurrentMember = share.memberId === currentMemberId;
-
-            return (
-              <div
-                className={`${styles.shareTotalRow} ${
-                  isCurrentMember ? styles.currentShareRow : ""
-                }`}
-                key={share.memberId}
-              >
-                <span className={styles.shareMember}>
-                  <span
-                    className={`${styles.shareAvatar} ${
-                      isCurrentMember ? styles.currentShareAvatar : ""
-                    }`}
-                    aria-hidden="true"
-                  >
-                    {member?.nickname.slice(0, 2) ?? "?"}
-                  </span>
-                  <strong>{member?.nickname ?? "알 수 없음"}</strong>
-                </span>
-                <strong>{formatWon(share.amount)}</strong>
+        <div className={styles.shareDetails}>
+          <section aria-labelledby="menu-share-title">
+            <div className={styles.shareSectionHeading}>
+              <div>
+                <h2 id="menu-share-title">메뉴별 분담금</h2>
+                <p>선택된 사람끼리 메뉴 금액을 나눴어요.</p>
               </div>
-            );
-          })}
-        </div>
+            </div>
 
-        <p className={styles.calculationNote}>
-          나누어지지 않는 1원은 메뉴에서 선택된 사람 순서대로 배분해요.
-        </p>
-      </section>
+            <div className={styles.shareBreakdownList}>
+              {(receipt.items ?? []).map((item) => {
+                const itemShares =
+                  receiptShares.itemShares.get(item.id) ?? [];
+
+                return (
+                  <article className={styles.shareBreakdownItem} key={item.id}>
+                    <div className={styles.shareBreakdownHeading}>
+                      <strong>{item.name}</strong>
+                      <span>{formatWon(item.line_total ?? item.amount)}</span>
+                    </div>
+                    <div
+                      className={styles.itemShareList}
+                      aria-label={`${item.name} 메뉴 분담액`}
+                    >
+                      {itemShares.map((share) => {
+                        const member = findMember(group, share.memberId);
+
+                        return (
+                          <span
+                            className={styles.itemShare}
+                            key={share.memberId}
+                          >
+                            <span>{member?.nickname ?? "알 수 없음"}</span>
+                            <strong>{formatWon(share.amount)}</strong>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+
+          <section
+            className={styles.shareSummary}
+            aria-labelledby="receipt-share-title"
+          >
+            <div className={styles.shareSummaryHeading}>
+              <div>
+                <h2 id="receipt-share-title">사람별 최종 부담금</h2>
+                <p>참여한 메뉴의 분담금을 모두 더했어요.</p>
+              </div>
+              <strong>{formatWon(receipt.total_amount)}</strong>
+            </div>
+
+            <div className={styles.shareTotalList}>
+              {receiptShares.memberTotals.map((share) => {
+                const member = findMember(group, share.memberId);
+                const isCurrentMember = share.memberId === currentMemberId;
+
+                return (
+                  <div
+                    className={`${styles.shareTotalRow} ${
+                      isCurrentMember ? styles.currentShareRow : ""
+                    }`}
+                    key={share.memberId}
+                  >
+                    <span className={styles.shareMember}>
+                      <span
+                        className={`${styles.shareAvatar} ${
+                          isCurrentMember ? styles.currentShareAvatar : ""
+                        }`}
+                        aria-hidden="true"
+                      >
+                        {member?.nickname.slice(0, 2) ?? "?"}
+                      </span>
+                      <strong>{member?.nickname ?? "알 수 없음"}</strong>
+                    </span>
+                    <strong>{formatWon(share.amount)}</strong>
+                  </div>
+                );
+              })}
+            </div>
+
+            <p className={styles.calculationNote}>
+              나누어지지 않는 1원은 메뉴에서 선택된 사람 순서대로
+              배분해요.
+            </p>
+          </section>
+        </div>
+      </details>
 
       {isDeleteConfirming && (
         <div className={styles.deleteConfirmation} role="alert">

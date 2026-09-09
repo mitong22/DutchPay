@@ -899,10 +899,7 @@ function ReceiptDetail({
       </dl>
 
       <div className={styles.itemHeading}>
-        <div>
-          <h2>누가 무엇을 먹었나요?</h2>
-          <p>메뉴마다 함께 먹은 사람을 확인해요.</p>
-        </div>
+        <h2>메뉴</h2>
         <p>{receipt.items?.length ?? 0}개 메뉴</p>
       </div>
 
@@ -911,61 +908,56 @@ function ReceiptDetail({
           const consumerMembers = (item.consumer_member_ids ?? [])
             .map((memberId) => findMember(group, memberId))
             .filter(Boolean);
+          const visibleConsumers = consumerMembers.slice(0, 4);
+          const hiddenConsumerCount = consumerMembers.length - 4;
 
           return (
             <article className={styles.itemRow} key={item.id}>
-              <div className={styles.itemOverview}>
-                <div>
-                  <strong>{item.name}</strong>
-                  <span>수량 {item.quantity ?? 1}개</span>
-                </div>
-                <strong>{formatWon(item.line_total ?? item.amount)}</strong>
-              </div>
+              <strong className={styles.compactItemName}>{item.name}</strong>
+              <div
+                className={styles.compactConsumers}
+                aria-label={`${item.name} 먹은 사람: ${
+                  consumerMembers.map((member) => member.nickname).join(", ") ||
+                  "없음"
+                }`}
+              >
+                {visibleConsumers.map((member) => {
+                  const isCaptain = member.member_type === "registered";
+                  const isCurrentMember = member.id === currentMemberId;
 
-              <div className={styles.itemConsumers}>
-                <span className={styles.itemConsumerLabel}>
-                  먹은 사람 {consumerMembers.length}명
-                </span>
-                <div
-                  className={styles.selectedMembers}
-                  aria-label={`${item.name} 먹은 사람`}
-                >
-                  {consumerMembers.length > 0 ? (
-                    consumerMembers.map((member) => {
-                      const isCaptain = member.member_type === "registered";
-                      const isCurrentMember = member.id === currentMemberId;
-
-                      return (
-                        <span
-                          className={`${styles.selectedMember} ${
-                            isCurrentMember ? styles.currentSelectedMember : ""
-                          }`}
-                          key={member.id}
-                        >
-                          <span
-                            className={`${styles.selectedAvatar} ${
-                              isCaptain ? styles.captainSelectedAvatar : ""
-                            } ${
-                              isCurrentMember
-                                ? styles.currentSelectedAvatar
-                                : ""
-                            }`}
-                            aria-hidden="true"
-                          >
-                            {member.nickname.slice(0, 2)}
-                          </span>
-                          <span>{member.nickname}</span>
-                          <span className={styles.selectedCheck} aria-hidden="true">
-                            ✓
-                          </span>
-                        </span>
-                      );
-                    })
-                  ) : (
-                    <span className={styles.emptyPeople}>선택된 사람 없음</span>
-                  )}
-                </div>
+                  return (
+                    <span
+                      className={`${styles.compactConsumerAvatar} ${
+                        isCaptain ? styles.captainCompactAvatar : ""
+                      } ${
+                        isCurrentMember ? styles.currentCompactAvatar : ""
+                      }`}
+                      key={member.id}
+                      title={member.nickname}
+                      aria-hidden="true"
+                    >
+                      {member.nickname.slice(0, 2)}
+                    </span>
+                  );
+                })}
+                {hiddenConsumerCount > 0 && (
+                  <span
+                    className={`${styles.compactConsumerAvatar} ${styles.moreConsumers}`}
+                    aria-hidden="true"
+                  >
+                    +{hiddenConsumerCount}
+                  </span>
+                )}
+                {consumerMembers.length === 0 && (
+                  <span className={styles.noConsumers}>—</span>
+                )}
               </div>
+              <span className={styles.compactQuantity}>
+                {item.quantity ?? 1}개
+              </span>
+              <strong className={styles.compactItemAmount}>
+                {formatWon(item.line_total ?? item.amount)}
+              </strong>
             </article>
           );
         })}

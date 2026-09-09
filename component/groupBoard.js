@@ -137,6 +137,11 @@ function ReceiptEntryDialog({ onClose }) {
 }
 
 function ReceiptList({ group, receipts, onAdd, onSelect }) {
+  const orderedMembers = [
+    ...group.members.filter((member) => member.member_type === "registered"),
+    ...group.members.filter((member) => member.member_type !== "registered"),
+  ];
+
   return (
     <>
       <section className={styles.boardIntro} aria-labelledby="board-title">
@@ -150,13 +155,20 @@ function ReceiptList({ group, receipts, onAdd, onSelect }) {
 
       <section className={styles.memberStrip} aria-label="현재 모임 멤버">
         <div className={styles.memberList}>
-          {group.members.map((member) => (
-            <span
-              className={styles.memberAvatar}
-              title={member.nickname}
-              key={member.id}
-            >
-              {member.nickname.slice(0, 1)}
+          {orderedMembers.map((member) => (
+            <span className={styles.member} key={member.id}>
+              {member.member_type === "registered" && (
+                <span className={styles.captainBadge}>총대</span>
+              )}
+              <span
+                className={styles.memberAvatar}
+                title={member.nickname}
+                aria-label={`${member.nickname}${
+                  member.member_type === "registered" ? " 총대" : ""
+                }`}
+              >
+                {member.nickname.slice(0, 2)}
+              </span>
             </span>
           ))}
         </div>

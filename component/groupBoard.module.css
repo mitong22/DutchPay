@@ -58,6 +58,17 @@
   align-items: center;
 }
 
+.member {
+  position: relative;
+  display: block;
+  width: 46px;
+  height: 46px;
+}
+
+.member + .member {
+  margin-left: -6px;
+}
+
 .memberAvatar {
   display: grid;
   width: 46px;
@@ -67,11 +78,22 @@
   border-radius: 50%;
   color: #35439b;
   background: #eef0ff;
+  font-size: 0.78rem;
   font-weight: 800;
 }
 
-.memberAvatar + .memberAvatar {
-  margin-left: -8px;
+.captainBadge {
+  position: absolute;
+  z-index: 1;
+  top: -9px;
+  left: -3px;
+  padding: 3px 6px;
+  border-radius: 999px;
+  color: #ffffff;
+  background: var(--primary);
+  font-size: 0.65rem;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .memberStrip > p {

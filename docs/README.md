@@ -745,7 +745,11 @@ group_member
 
 총대는 Better Auth를 이용하여 로그인한다.
 
-로그인한 사용자는 **모임 만들기**를 진행할 수 있다.
+로그인한 총대는 먼저 정산 대시보드를 확인한다.
+
+대시보드 상단에는 완료되지 않은 모임을 기준으로 현재 총대가 받아야 할 돈과 보내야 할 돈을 각각 합산해 표시한다.
+
+모임 목록에는 각 모임의 `정산 중` 또는 `정산 완료` 상태를 표시하며, 로그인한 사용자는 **새 정산 시작**을 통해 모임 만들기를 진행할 수 있다.
 
 모임 만들기는 다음 Step 방식으로 구성한다.
 
@@ -1145,6 +1149,10 @@ OCR / 이미지 분석
 
 가능한 경우 불필요한 중간 송금을 상계하여 실제 송금 횟수를 줄인다.
 
+총대는 정산 결과를 확인한 뒤 **정산 완료** 버튼으로 모임을 완료할 수 있다.
+
+완료된 모임은 `status: "COMPLETED"`와 `completed_at`을 기록하고, 대시보드의 진행 중 금액 합산에서는 제외한다. 완료 후 영수증과 정산 결과는 조회할 수 있지만 수정하거나 삭제할 수 없다.
+
 
 ### 10. 화면 기본 구조
 
@@ -1437,6 +1445,7 @@ mode
 status
 expected_member_count
 activated_at
+completed_at
 calculation_version
 created_at
 updated_at
@@ -1460,11 +1469,14 @@ TOGETHER
 ```text
 WAITING
 ACTIVE
+COMPLETED
 ```
 
 `SOLO` 모임은 생성과 동시에 `ACTIVE`가 되며 `activated_at`에 생성 시각을 기록한다.
 
 `TOGETHER` 모임은 `WAITING`으로 생성하고, 실제 참여 인원이 `expected_member_count`에 도달하면 `ACTIVE`로 전환한다.
+
+총대가 정산을 확정하면 `COMPLETED`로 전환하고 `completed_at`에 완료 시각을 기록한다.
 
 `expected_member_count`는 총대를 포함한 전체 참여 예정 인원이다.
 
@@ -1967,7 +1979,7 @@ MongoDB validator는 최소한 다음 내용을 보호한다.
 - 필수 필드 존재 여부
 - 문자열, 숫자, 날짜, 배열 등 기본 BSON 타입
 - `expense_group.mode`의 `SOLO | TOGETHER` enum
-- `expense_group.status`의 `WAITING | ACTIVE` enum
+- `expense_group.status`의 `WAITING | ACTIVE | COMPLETED` enum
 - `invite.status`의 `PENDING | CLAIMED | REVOKED` enum
 - `receipts.input_method`의 `MANUAL | CAMERA | UPLOAD` enum
 - `receipts.ocr_status`의 `NONE | PENDING | COMPLETED | FAILED` enum

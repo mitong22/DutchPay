@@ -2,7 +2,7 @@
 
 import { useState, useSyncExternalStore } from "react";
 
-import GroupBoard from "./groupBoard";
+import GroupBoard, { calculateGroupSettlement } from "./groupBoard";
 import styles from "./modeSelector.module.css";
 
 const LEGACY_MODE_KEY = "dutchpay:group-draft:mode";
@@ -188,6 +188,25 @@ function saveGroup(group) {
   notifyStoreChange();
 }
 
+function replaceGroup(group) {
+  const currentGroups = parseGroups(getGroupsSnapshot());
+  const nextGroups = currentGroups.map((currentGroup) =>
+    currentGroup.id === group.id ? group : currentGroup,
+  );
+
+  window.localStorage.setItem(GROUPS_KEY, JSON.stringify(nextGroups));
+
+  const activeGroup = JSON.parse(
+    window.localStorage.getItem(ACTIVE_GROUP_KEY) ?? "null",
+  );
+
+  if (activeGroup?.id === group.id) {
+    window.localStorage.setItem(ACTIVE_GROUP_KEY, JSON.stringify(group));
+  }
+
+  notifyStoreChange();
+}
+
 function createId(prefix) {
   const value =
     typeof crypto.randomUUID === "function"
@@ -248,14 +267,11 @@ function getReceiptSummary(groupId) {
     const safeReceipts = Array.isArray(receipts) ? receipts : [];
 
     return {
+      receipts: safeReceipts,
       count: safeReceipts.length,
-      total: safeReceipts.reduce((total, receipt) => {
-        const amount = Number(receipt.total_amount);
-        return total + (Number.isFinite(amount) ? amount : 0);
-      }, 0),
     };
   } catch {
-    return { count: 0, total: 0 };
+    return { receipts: [], count: 0 };
   }
 }
 
@@ -348,16 +364,28 @@ function Dashboard({
   onCreate,
   onOpenGroup,
 }) {
-  const groupSummaries = groups.map((group) => ({
-    group,
-    receiptSummary: getReceiptSummary(group.id),
-  }));
-  const totalReceiptCount = groupSummaries.reduce(
-    (total, summary) => total + summary.receiptSummary.count,
+  const groupSummaries = groups.map((group) => {
+    const receiptSummary = getReceiptSummary(group.id);
+    const settlement = calculateGroupSettlement(
+      group,
+      receiptSummary.receipts,
+    );
+    const captainBalance =
+      settlement.memberTotals.find(
+        (memberTotal) => memberTotal.memberId === captain.id,
+      )?.balance ?? 0;
+
+    return { group, receiptSummary, captainBalance };
+  });
+  const activeSummaries = groupSummaries.filter(
+    ({ group }) => group.status !== "COMPLETED",
+  );
+  const receiveAmount = activeSummaries.reduce(
+    (total, summary) => total + Math.max(summary.captainBalance, 0),
     0,
   );
-  const totalAmount = groupSummaries.reduce(
-    (total, summary) => total + summary.receiptSummary.total,
+  const sendAmount = activeSummaries.reduce(
+    (total, summary) => total + Math.max(-summary.captainBalance, 0),
     0,
   );
   const hasDraft =
@@ -378,20 +406,26 @@ function Dashboard({
         </button>
       </section>
 
-      <dl className={styles.dashboardStats}>
-        <div>
-          <dt>저장된 모임</dt>
-          <dd>{groups.length}개</dd>
+      <section
+        className={styles.balanceSpotlight}
+        aria-labelledby="balance-spotlight-title"
+      >
+        <div className={styles.balanceSpotlightIntro}>
+          <span><i aria-hidden="true" /> 진행 중인 정산</span>
+          <h2 id="balance-spotlight-title">지금 내 돈 흐름</h2>
+          <p>정산 완료 전 모임에서 주고받을 금액을 모두 모았어요.</p>
         </div>
-        <div>
-          <dt>등록 영수증</dt>
-          <dd>{totalReceiptCount}장</dd>
-        </div>
-        <div>
-          <dt>전체 기록 금액</dt>
-          <dd>{formatWon(totalAmount)}</dd>
-        </div>
-      </dl>
+        <dl className={styles.balanceCards}>
+          <div className={styles.receiveCard}>
+            <dt>내가 받을 돈</dt>
+            <dd>{formatWon(receiveAmount)}</dd>
+          </div>
+          <div className={styles.sendCard}>
+            <dt>내가 보낼 돈</dt>
+            <dd>{formatWon(sendAmount)}</dd>
+          </div>
+        </dl>
+      </section>
 
       {hasDraft && (
         <section className={styles.dashboardSection} aria-labelledby="draft-title">
@@ -416,36 +450,76 @@ function Dashboard({
         <div className={styles.sectionHeadingRow}>
           <div>
             <p className={styles.eyebrow}>내 정산</p>
-            <h2 id="saved-title">저장된 모임</h2>
+            <h2 id="saved-title">정산 목록</h2>
           </div>
-          <span>{groups.length}개</span>
         </div>
 
         {groupSummaries.length > 0 ? (
           <div className={styles.savedGroupList}>
-            {groupSummaries.map(({ group, receiptSummary }) => (
-              <button
-                className={styles.savedGroupCard}
-                type="button"
-                key={group.id}
-                onClick={() => onOpenGroup(group.id)}
-              >
-                <span className={styles.groupCardMain}>
-                  <span className={styles.groupModeBadge}>
-                    {group.mode === "TOGETHER" ? "함께하기" : "혼자하기"}
+            {groupSummaries.map(({ group, receiptSummary, captainBalance }) => {
+              const isCompleted = group.status === "COMPLETED";
+              const balanceLabel =
+                captainBalance > 0
+                  ? isCompleted
+                    ? "받은 돈"
+                    : "받을 돈"
+                  : captainBalance < 0
+                    ? isCompleted
+                      ? "보낸 돈"
+                      : "보낼 돈"
+                    : "정산 없음";
+
+              return (
+                <button
+                  className={styles.savedGroupCard}
+                  type="button"
+                  key={group.id}
+                  onClick={() => onOpenGroup(group.id)}
+                >
+                  <span className={styles.groupCardMain}>
+                    <span className={styles.groupBadges}>
+                      <span className={styles.groupModeBadge}>
+                        {group.mode === "TOGETHER" ? "함께하기" : "혼자하기"}
+                      </span>
+                      <span
+                        className={`${styles.groupStatusBadge} ${
+                          isCompleted
+                            ? styles.completedStatus
+                            : styles.activeStatus
+                        }`}
+                      >
+                        {isCompleted ? "정산 완료" : "정산 중"}
+                      </span>
+                    </span>
+                    <strong>{group.name}</strong>
+                    <small>
+                      {group.members?.length ?? 0}명 · {receiptSummary.count}장 · {formatSavedDate(
+                        group.completed_at ??
+                          group.activated_at ??
+                          group.created_at,
+                      )}
+                    </small>
                   </span>
-                  <strong>{group.name}</strong>
-                  <small>
-                    {group.members?.length ?? 0}명 · {receiptSummary.count}장 · {formatSavedDate(group.activated_at ?? group.created_at)}
-                  </small>
-                </span>
-                <span className={styles.groupCardTotal}>
-                  <small>등록 금액</small>
-                  <strong>{formatWon(receiptSummary.total)}</strong>
-                </span>
-                <span className={styles.cardArrow} aria-hidden="true">→</span>
-              </button>
-            ))}
+                  <span className={styles.groupCardBalance}>
+                    <small>{balanceLabel}</small>
+                    <strong
+                      className={
+                        isCompleted
+                          ? ""
+                          : captainBalance > 0
+                          ? styles.receiveText
+                          : captainBalance < 0
+                            ? styles.sendText
+                            : ""
+                      }
+                    >
+                      {formatWon(Math.abs(captainBalance))}
+                    </strong>
+                  </span>
+                  <span className={styles.cardArrow} aria-hidden="true">→</span>
+                </button>
+              );
+            })}
           </div>
         ) : (
           <div className={styles.emptyDashboard}>
@@ -924,6 +998,20 @@ export default function ModeSelector({ captain }) {
     resetPageScroll();
   }
 
+  function completeGroup(groupId) {
+    const group = groups.find((currentGroup) => currentGroup.id === groupId);
+
+    if (!group || group.status === "COMPLETED") {
+      return;
+    }
+
+    replaceGroup({
+      ...group,
+      status: "COMPLETED",
+      completed_at: new Date().toISOString(),
+    });
+  }
+
   function createGroup() {
     const message = getSetupError(draft, captain);
 
@@ -983,7 +1071,12 @@ export default function ModeSelector({ captain }) {
       </header>
 
       {screen === "group" && selectedGroup ? (
-        <GroupBoard group={selectedGroup} currentMemberId={captain.id} onBack={showDashboard} />
+        <GroupBoard
+          group={selectedGroup}
+          currentMemberId={captain.id}
+          onBack={showDashboard}
+          onComplete={() => completeGroup(selectedGroup.id)}
+        />
       ) : screen === "create" ? (
         <main className={styles.main}>
           <div className={styles.creationNavigation}>

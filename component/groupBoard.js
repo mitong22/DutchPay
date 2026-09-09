@@ -183,7 +183,7 @@ function calculateReceiptShares(receipt) {
   };
 }
 
-function calculateGroupSettlement(group, receipts) {
+export function calculateGroupSettlement(group, receipts) {
   const totalsByMember = new Map(
     group.members.map((member) => [
       member.id,
@@ -791,7 +791,14 @@ function ReceiptEntryDialog({
   );
 }
 
-function ReceiptList({ currentMemberId, group, receipts, onAdd, onSelect }) {
+function ReceiptList({
+  currentMemberId,
+  group,
+  isReadOnly,
+  receipts,
+  onAdd,
+  onSelect,
+}) {
   const orderedMembers = [
     ...group.members.filter((member) => member.member_type === "registered"),
     ...group.members.filter((member) => member.member_type !== "registered"),
@@ -888,21 +895,23 @@ function ReceiptList({ currentMemberId, group, receipts, onAdd, onSelect }) {
               );
             })}
 
-            <button
-              className={styles.addReceiptRow}
-              type="button"
-              onClick={onAdd}
-            >
-              <span className={styles.addIcon} aria-hidden="true">
-                +
-              </span>
-              <span>
-                <strong>
-                  {receipts.length === 0 ? "첫 영수증 추가" : "영수증 추가"}
-                </strong>
-                <small>직접 입력 · 촬영하기 · 사진 첨부</small>
-              </span>
-            </button>
+            {!isReadOnly && (
+              <button
+                className={styles.addReceiptRow}
+                type="button"
+                onClick={onAdd}
+              >
+                <span className={styles.addIcon} aria-hidden="true">
+                  +
+                </span>
+                <span>
+                  <strong>
+                    {receipts.length === 0 ? "첫 영수증 추가" : "영수증 추가"}
+                  </strong>
+                  <small>직접 입력 · 촬영하기 · 사진 첨부</small>
+                </span>
+              </button>
+            )}
           </section>
         </div>
 
@@ -1101,6 +1110,7 @@ function ReceiptList({ currentMemberId, group, receipts, onAdd, onSelect }) {
 function ReceiptDetail({
   currentMemberId,
   group,
+  isReadOnly,
   receipt,
   onBack,
   onDelete,
@@ -1151,28 +1161,32 @@ function ReceiptDetail({
         <button className={styles.backButton} type="button" onClick={onBack}>
           ← 영수증 목록
         </button>
-        <div className={styles.detailActions}>
-          <button
-            className={styles.secondaryButton}
-            type="button"
-            onClick={() => {
-              setActionMessage("");
-              setIsEditing(true);
-            }}
-          >
-            수정하기
-          </button>
-          <button
-            className={styles.deleteButton}
-            type="button"
-            onClick={() => {
-              setActionMessage("");
-              setIsDeleteConfirming(true);
-            }}
-          >
-            삭제
-          </button>
-        </div>
+        {isReadOnly ? (
+          <span className={styles.readOnlyBadge}>완료된 정산 · 읽기 전용</span>
+        ) : (
+          <div className={styles.detailActions}>
+            <button
+              className={styles.secondaryButton}
+              type="button"
+              onClick={() => {
+                setActionMessage("");
+                setIsEditing(true);
+              }}
+            >
+              수정하기
+            </button>
+            <button
+              className={styles.deleteButton}
+              type="button"
+              onClick={() => {
+                setActionMessage("");
+                setIsDeleteConfirming(true);
+              }}
+            >
+              삭제
+            </button>
+          </div>
+        )}
       </div>
 
       <div className={styles.detailHeading}>
@@ -1460,9 +1474,15 @@ function ReceiptDetail({
   );
 }
 
-export default function GroupBoard({ currentMemberId, group, onBack }) {
+export default function GroupBoard({
+  currentMemberId,
+  group,
+  onBack,
+  onComplete,
+}) {
   const [isReceiptDialogOpen, setIsReceiptDialogOpen] = useState(false);
   const [selectedReceiptId, setSelectedReceiptId] = useState(null);
+  const [isCompletionConfirming, setIsCompletionConfirming] = useState(false);
   const readReceiptSnapshot = useCallback(
     () => getReceiptsSnapshot(group.id),
     [group.id],
@@ -1476,6 +1496,9 @@ export default function GroupBoard({ currentMemberId, group, onBack }) {
   const selectedReceipt = receipts.find(
     (receipt) => receipt.id === selectedReceiptId,
   );
+  const currentMember = findMember(group, currentMemberId);
+  const isCaptain = currentMember?.member_type === "registered";
+  const isCompleted = group.status === "COMPLETED";
 
   function showReceipt(receiptId) {
     setSelectedReceiptId(receiptId);
@@ -1491,15 +1514,54 @@ export default function GroupBoard({ currentMemberId, group, onBack }) {
     <main className={styles.boardMain}>
       <nav className={styles.boardNavigation} aria-label="모임 화면 탐색">
         <button type="button" onClick={onBack}>← 대시보드</button>
-        <span>
-          {group.mode === "TOGETHER" ? "함께하기" : "혼자하기"} · 총대 계정에 저장됨
-        </span>
+        <div className={styles.boardStatusActions}>
+          <span>
+            {group.mode === "TOGETHER" ? "함께하기" : "혼자하기"} · 총대 계정에 저장됨
+          </span>
+          {isCompleted ? (
+            <strong className={styles.completedBadge}>✓ 정산 완료</strong>
+          ) : isCaptain ? (
+            <button
+              className={styles.completeButton}
+              type="button"
+              disabled={receipts.length === 0}
+              onClick={() => setIsCompletionConfirming(true)}
+            >
+              정산 완료
+            </button>
+          ) : null}
+        </div>
       </nav>
+
+      {isCompletionConfirming && !isCompleted && (
+        <section className={styles.completionConfirmation} role="alert">
+          <div>
+            <strong>현재 금액으로 정산을 완료할까요?</strong>
+            <p>완료하면 영수증은 그대로 보관되고 수정할 수 없어요.</p>
+          </div>
+          <div>
+            <button type="button" onClick={() => setIsCompletionConfirming(false)}>
+              취소
+            </button>
+            <button
+              className={styles.confirmCompleteButton}
+              type="button"
+              onClick={() => {
+                onComplete();
+                setIsCompletionConfirming(false);
+              }}
+            >
+              완료 확정
+            </button>
+          </div>
+        </section>
+      )}
 
       {selectedReceipt ? (
         <ReceiptDetail
           currentMemberId={currentMemberId}
           group={group}
+          isReadOnly={isCompleted}
           receipt={selectedReceipt}
           onBack={showReceiptList}
           onDelete={(receiptId) => {
@@ -1517,6 +1579,7 @@ export default function GroupBoard({ currentMemberId, group, onBack }) {
         <ReceiptList
           currentMemberId={currentMemberId}
           group={group}
+          isReadOnly={isCompleted}
           receipts={receipts}
           onAdd={() => setIsReceiptDialogOpen(true)}
           onSelect={showReceipt}

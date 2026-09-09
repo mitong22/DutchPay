@@ -4,6 +4,7 @@ import { connection } from "next/server";
 import ReceiptForm from "@/app/groups/[groupId]/receipts/receipt-form";
 import { getGroupContext } from "@/lib/auth-context";
 import { getReceiptEditorData } from "@/lib/group-service";
+import { userIdsEqual } from "@/lib/utils/user-id.mjs";
 
 export const metadata = {
   title: "영수증 추가",
@@ -22,7 +23,7 @@ export default async function NewReceiptPage({ params }) {
   const owner = members.find(
     (member) =>
       member.member_type === "registered" &&
-      member.user_id === context.group.created_by,
+      userIdsEqual(member.user_id, context.group.created_by),
   );
 
   if (!owner) {

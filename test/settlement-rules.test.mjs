@@ -72,6 +72,30 @@ test("an exactly divisible menu stores no remainder recipients", () => {
   );
 });
 
+test("a divisible legacy menu without remainder recipients is read safely", () => {
+  assert.deepEqual(
+    calculateItemShares({
+      lineTotal: 6000,
+      consumerMemberIds: ["member-a", "member-b"],
+    }),
+    [
+      { memberId: "member-a", amount: 3000 },
+      { memberId: "member-b", amount: 3000 },
+    ],
+  );
+});
+
+test("a non-divisible legacy menu still requires stored random recipients", () => {
+  assert.throws(
+    () =>
+      calculateItemShares({
+        lineTotal: 10000,
+        consumerMemberIds: CONSUMER_IDS,
+      }),
+    /must be an array/,
+  );
+});
+
 test("remainder recipients must match the required count and consumers", () => {
   assert.throws(
     () =>

@@ -4,6 +4,7 @@ import { connection } from "next/server";
 import ReceiptForm from "@/app/groups/[groupId]/receipts/receipt-form";
 import { getGroupContext } from "@/lib/auth-context";
 import { getReceiptEditorData } from "@/lib/group-service";
+import { isTemporaryReceiptDataEnabled } from "@/lib/temporary-receipt-config";
 import { userIdsEqual } from "@/lib/utils/user-id.mjs";
 
 export const metadata = {
@@ -46,6 +47,7 @@ export default async function NewReceiptPage({ params }) {
         mode: context.group.mode,
       }}
       members={memberInputs}
+      temporaryReceiptDataEnabled={isTemporaryReceiptDataEnabled()}
       initialReceipt={{
         id: "",
         storeName: "",

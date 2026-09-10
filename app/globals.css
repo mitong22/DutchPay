@@ -377,6 +377,11 @@ button:disabled {
   color: var(--danger);
 }
 
+.form-message--success {
+  background: #e9f8f1;
+  color: var(--success);
+}
+
 .how-it-works {
   padding-block: 90px 120px;
 }
@@ -2069,10 +2074,25 @@ th {
   line-height: 1.7;
 }
 
+.ocr-notice__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 9px;
+}
+
+.ocr-notice__actions form {
+  margin: 0;
+}
+
 .receipt-form {
   display: grid;
   gap: 0;
   overflow: hidden;
+}
+
+.receipt-form__source {
+  margin: 24px clamp(23px, 4vw, 38px) 0;
 }
 
 .form-section {
@@ -2411,5 +2431,11 @@ th {
     display: grid;
     grid-template-columns: 1fr 1fr;
     padding: 16px;
+  }
+
+  .ocr-notice__actions,
+  .ocr-notice__actions form,
+  .ocr-notice__actions .button {
+    width: 100%;
   }
 }

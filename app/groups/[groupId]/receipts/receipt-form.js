@@ -1,14 +1,30 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 
 import { formatWon } from "@/app/groups/[groupId]/format-won";
-import { saveReceiptAction } from "@/app/groups/[groupId]/receipts/actions";
+import {
+  loadTemporaryReceiptAction,
+  saveReceiptAction,
+} from "@/app/groups/[groupId]/receipts/actions";
 
 const INITIAL_ACTION_STATE = { status: "idle", message: "" };
+const INITIAL_TEMPORARY_DATA_STATE = {
+  status: "idle",
+  message: "",
+  loadId: "",
+  draft: null,
+};
 
-function EntryModeNotice({ mode, onManualMode }) {
+function EntryModeNotice({
+  mode,
+  onManualMode,
+  temporaryDataEnabled,
+  temporaryDataAction,
+  temporaryDataState,
+  isTemporaryDataPending,
+}) {
   const isCamera = mode === "camera";
 
   return (
@@ -19,9 +35,33 @@ function EntryModeNotice({ mode, onManualMode }) {
         OCR 제공 업체와 영수증 이미지 저장 위치가 아직 결정되지 않아 이미지가
         외부로 전송되거나 저장되지 않도록 비활성화했습니다.
       </p>
-      <button className="button button--primary" type="button" onClick={onManualMode}>
-        직접 입력으로 계속하기
-      </button>
+      <div className="ocr-notice__actions">
+        <button
+          className={`button ${temporaryDataEnabled ? "button--quiet" : "button--primary"}`}
+          type="button"
+          onClick={onManualMode}
+        >
+          직접 입력으로 계속하기
+        </button>
+        {temporaryDataEnabled ? (
+          <form action={temporaryDataAction}>
+            <button
+              className="button button--primary"
+              type="submit"
+              disabled={isTemporaryDataPending}
+            >
+              {isTemporaryDataPending
+                ? "임시데이터 불러오는 중..."
+                : "임시데이터 가져오기"}
+            </button>
+          </form>
+        ) : null}
+      </div>
+      {temporaryDataState.status === "error" ? (
+        <p className="form-message form-message--error" role="alert">
+          {temporaryDataState.message}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -51,17 +91,38 @@ function MemberCheckbox({
   );
 }
 
-export default function ReceiptForm({ group, members, initialReceipt }) {
+export default function ReceiptForm({
+  group,
+  members,
+  initialReceipt,
+  temporaryReceiptDataEnabled = false,
+}) {
   const saveAction = saveReceiptAction.bind(
     null,
     group.id,
     initialReceipt.id,
   );
+  const temporaryDataLoaderAction = loadTemporaryReceiptAction.bind(
+    null,
+    group.id,
+  );
   const [actionState, formAction, isPending] = useActionState(
     saveAction,
     INITIAL_ACTION_STATE,
   );
+  const [
+    temporaryDataState,
+    temporaryDataFormAction,
+    isTemporaryDataPending,
+  ] = useActionState(
+    temporaryDataLoaderAction,
+    INITIAL_TEMPORARY_DATA_STATE,
+  );
+  const appliedTemporaryLoadId = useRef("");
   const [entryMode, setEntryMode] = useState("manual");
+  const [storeName, setStoreName] = useState(initialReceipt.storeName);
+  const [loadedTemporarySourceName, setLoadedTemporarySourceName] =
+    useState("");
   const [paidByMemberId, setPaidByMemberId] = useState(
     initialReceipt.paidByMemberId,
   );
@@ -74,6 +135,32 @@ export default function ReceiptForm({ group, members, initialReceipt }) {
       clientKey: item.id || `initial-${index}`,
     })),
   );
+
+  useEffect(() => {
+    if (
+      temporaryDataState.status !== "success" ||
+      !temporaryDataState.draft ||
+      !temporaryDataState.loadId ||
+      appliedTemporaryLoadId.current === temporaryDataState.loadId
+    ) {
+      return;
+    }
+
+    appliedTemporaryLoadId.current = temporaryDataState.loadId;
+    setStoreName(temporaryDataState.draft.storeName);
+    setMenus(
+      temporaryDataState.draft.items.map((item, itemIndex) => ({
+        id: "",
+        clientKey: `temporary-${temporaryDataState.loadId}-${itemIndex}`,
+        menuName: item.menuName,
+        lineTotal: String(item.lineTotal),
+        consumerMemberIds: [...participantMemberIds],
+      })),
+    );
+    setLoadedTemporarySourceName(temporaryDataState.draft.sourceName);
+    setEntryMode("manual");
+  }, [participantMemberIds, temporaryDataState]);
+
   const totalAmount = menus.reduce(
     (total, menu) => total + (Number(menu.lineTotal) || 0),
     0,
@@ -179,10 +266,23 @@ export default function ReceiptForm({ group, members, initialReceipt }) {
         <EntryModeNotice
           mode={entryMode}
           onManualMode={() => setEntryMode("manual")}
+          temporaryDataEnabled={temporaryReceiptDataEnabled}
+          temporaryDataAction={temporaryDataFormAction}
+          temporaryDataState={temporaryDataState}
+          isTemporaryDataPending={isTemporaryDataPending}
         />
       ) : (
         <form className="receipt-form" action={formAction}>
           <input name="menu_count" type="hidden" value={menus.length} />
+
+          {loadedTemporarySourceName ? (
+            <p
+              className="form-message form-message--success receipt-form__source"
+              aria-live="polite"
+            >
+              임시 OCR 데이터 {loadedTemporarySourceName}를 불러왔습니다.
+            </p>
+          ) : null}
 
           <section className="form-section">
             <div className="form-section__heading">
@@ -199,9 +299,10 @@ export default function ReceiptForm({ group, members, initialReceipt }) {
                   name="store_name"
                   type="text"
                   maxLength={80}
-                  defaultValue={initialReceipt.storeName}
+                  value={storeName}
                   placeholder="예: 1차 고깃집"
                   required
+                  onChange={(event) => setStoreName(event.target.value)}
                 />
               </label>
 

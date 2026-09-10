@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
 
 import ReceiptDetail from "./group/receiptDetail";
 import ReceiptEntryDialog from "./group/receiptEntryDialog";
@@ -10,7 +10,6 @@ import {
   appendReceipt,
   findMember,
   getReceiptsSnapshot,
-  getServerReceiptsSnapshot,
   parseReceipts,
   removeReceipt,
   replaceReceipt,
@@ -30,14 +29,24 @@ export default function GroupBoard({
 }) {
   const [isReceiptDialogOpen, setIsReceiptDialogOpen] = useState(false);
   const [isCompletionConfirming, setIsCompletionConfirming] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
+  const [completionError, setCompletionError] = useState("");
+  const initialReceiptsSnapshot = useMemo(
+    () => JSON.stringify(group.receipts ?? []),
+    [group.receipts],
+  );
   const readReceiptSnapshot = useCallback(
-    () => getReceiptsSnapshot(group.id),
-    [group.id],
+    () => getReceiptsSnapshot(group.id, initialReceiptsSnapshot),
+    [group.id, initialReceiptsSnapshot],
+  );
+  const readInitialReceiptsSnapshot = useCallback(
+    () => initialReceiptsSnapshot,
+    [initialReceiptsSnapshot],
   );
   const receiptsSnapshot = useSyncExternalStore(
     subscribeToReceipts,
     readReceiptSnapshot,
-    getServerReceiptsSnapshot,
+    readInitialReceiptsSnapshot,
   );
   const receipts = parseReceipts(receiptsSnapshot);
   const selectedReceipt = receipts.find(
@@ -77,7 +86,7 @@ export default function GroupBoard({
           receipt={selectedReceipt}
           onBack={showReceiptList}
           onDelete={(receiptId) => {
-            const isRemoved = removeReceipt(group.id, receiptId);
+            const isRemoved = removeReceipt(group.id, receiptId, receipts);
 
             if (isRemoved) {
               showReceiptList();
@@ -85,7 +94,7 @@ export default function GroupBoard({
 
             return isRemoved;
           }}
-          onUpdate={(receipt) => replaceReceipt(group.id, receipt)}
+          onUpdate={(receipt) => replaceReceipt(group.id, receipt, receipts)}
         />
       ) : (
         <>
@@ -106,6 +115,7 @@ export default function GroupBoard({
                     <strong>현재 금액으로 정산을 완료할까요?</strong>
                     <p>완료하면 영수증은 그대로 보관되고 수정할 수 없어요.</p>
                   </div>
+                  {completionError && <p>{completionError}</p>}
                   <div>
                     <button
                       type="button"
@@ -116,12 +126,22 @@ export default function GroupBoard({
                     <button
                       className={styles.confirmCompleteButton}
                       type="button"
-                      onClick={() => {
-                        onComplete();
-                        setIsCompletionConfirming(false);
+                      disabled={isCompleting}
+                      onClick={async () => {
+                        setIsCompleting(true);
+                        setCompletionError("");
+
+                        try {
+                          await onComplete();
+                          setIsCompletionConfirming(false);
+                        } catch (error) {
+                          setCompletionError(error.message);
+                        } finally {
+                          setIsCompleting(false);
+                        }
                       }}
                     >
-                      완료 확정
+                      {isCompleting ? "완료 중..." : "완료 확정"}
                     </button>
                   </div>
                 </section>
@@ -146,7 +166,7 @@ export default function GroupBoard({
           group={group}
           onClose={() => setIsReceiptDialogOpen(false)}
           onSave={(receipt) => {
-            const isSaved = appendReceipt(group.id, receipt);
+            const isSaved = appendReceipt(group.id, receipt, receipts);
 
             if (isSaved) {
               setIsReceiptDialogOpen(false);

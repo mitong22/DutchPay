@@ -3,7 +3,6 @@ import styles from "../app.module.css";
 import {
   formatSavedDate,
   formatWon,
-  getReceiptSummary,
 } from "@/lib/demoStore";
 
 export default function DashboardPage({
@@ -13,14 +12,20 @@ export default function DashboardPage({
   onOpenGroup,
 }) {
   const groupSummaries = groups.map((group) => {
-    const receiptSummary = getReceiptSummary(group.id);
+    const receiptSummary = {
+      receipts: group.receipts ?? [],
+      count: group.receipts?.length ?? 0,
+    };
     const settlement = calculateGroupSettlement(
       group,
       receiptSummary.receipts,
     );
+    const captainMember = group.members.find(
+      (member) => member.user_id === captain.user_id,
+    );
     const captainBalance =
       settlement.memberTotals.find(
-        (memberTotal) => memberTotal.memberId === captain.id,
+        (memberTotal) => memberTotal.memberId === captainMember?.id,
       )?.balance ?? 0;
 
     return { group, receiptSummary, captainBalance };

@@ -18,7 +18,7 @@ if (!isLocal || databaseName !== LOCAL_DATABASE) {
 }
 
 const ids = {
-  user: "seed-user-miyeon",
+  user: "mock-user-001",
   activeGroup: "seed-group-active",
   completedGroup: "seed-group-completed",
   activeCaptain: "seed-member-active-miyeon",
@@ -232,6 +232,7 @@ try {
 
   const db = client.db(databaseName);
   await createIndexes(db);
+  await db.collection("user").deleteOne({ _id: "seed-user-miyeon" });
   await upsertDocuments(db, "user", [
     {
       _id: ids.user,

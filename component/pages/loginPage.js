@@ -9,9 +9,8 @@ import {
   MOCK_LOGIN_ID,
   MOCK_LOGIN_PASSWORD,
 } from "@/lib/mockSession.mjs";
-import { ensureDemoData } from "@/lib/demoStore";
 
-export default function LoginPage({ captain }) {
+export default function LoginPage() {
   const router = useRouter();
   const [validationMessage, setValidationMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -37,7 +36,6 @@ export default function LoginPage({ captain }) {
         throw new Error(result.message ?? "로그인하지 못했어요.");
       }
 
-      ensureDemoData(captain);
       router.replace("/dashboard");
     } catch (error) {
       setValidationMessage(error.message);

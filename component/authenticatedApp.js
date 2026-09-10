@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 
 import BrandLogo from "./brandLogo";
@@ -10,26 +10,30 @@ import GroupCreatePage from "./pages/groupCreatePage";
 import styles from "./app.module.css";
 import {
   EMPTY_DRAFT,
-  createId,
-  ensureDemoData,
   getDraftParticipantNames,
   getDraftSnapshot,
-  getGroupsSnapshot,
   getServerDraftSnapshot,
-  getServerGroupsSnapshot,
   getSetupError,
   parseDraft,
-  parseGroups,
   readInviteResponse,
   replaceDraft,
-  replaceGroup,
   saveDraft,
-  saveGroup,
   subscribeToDemoStore,
 } from "@/lib/demoStore";
 
+async function readGroupResponse(response) {
+  const result = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(result.message ?? "모임 정보를 처리하지 못했어요.");
+  }
+
+  return result;
+}
+
 export default function AuthenticatedApp({
   captain,
+  groups = [],
   page = "dashboard",
   groupId = null,
   receiptId = null,
@@ -40,18 +44,8 @@ export default function AuthenticatedApp({
     getDraftSnapshot,
     getServerDraftSnapshot,
   );
-  const groupsSnapshot = useSyncExternalStore(
-    subscribeToDemoStore,
-    getGroupsSnapshot,
-    getServerGroupsSnapshot,
-  );
   const draft = parseDraft(draftSnapshot);
-  const groups = parseGroups(groupsSnapshot);
   const selectedGroup = groups.find((group) => group.id === groupId);
-
-  useEffect(() => {
-    ensureDemoData(captain);
-  }, [captain]);
 
   function showDashboard() {
     router.push("/dashboard");
@@ -77,18 +71,19 @@ export default function AuthenticatedApp({
     );
   }
 
-  function completeGroup(nextGroupId) {
-    const group = groups.find((currentGroup) => currentGroup.id === nextGroupId);
+  async function completeGroup(nextGroupId) {
+    const response = await fetch(
+      `/api/groups/${encodeURIComponent(nextGroupId)}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "COMPLETED" }),
+      },
+    );
+    const result = await readGroupResponse(response);
 
-    if (!group || group.status === "COMPLETED") {
-      return;
-    }
-
-    replaceGroup({
-      ...group,
-      status: "COMPLETED",
-      completed_at: new Date().toISOString(),
-    });
+    router.refresh();
+    return result.group;
   }
 
   async function createGroup() {
@@ -96,48 +91,25 @@ export default function AuthenticatedApp({
 
     if (message) {
       saveDraft({ step: 2 });
-      return;
+      throw new Error(message);
     }
 
-    const now = new Date().toISOString();
     const participantNames = getDraftParticipantNames(draft);
-    const invitedMembers =
-      draft.mode === "TOGETHER" &&
-      draft.togetherParticipants.length === participantNames.length
-        ? draft.togetherParticipants.map((member) => ({
-            id: member.id,
-            user_id: null,
-            nickname: member.nickname,
-            member_type: member.memberType,
-          }))
-        : participantNames.map((nickname) => ({
-            id: createId("mock-member"),
-            user_id: null,
-            nickname,
-            member_type: "guest",
-          }));
-    const members = [
-      {
-        id: captain.id,
-        user_id: captain.user_id,
-        nickname: captain.nickname,
-        member_type: captain.member_type,
-      },
-      ...invitedMembers,
-    ];
-    const group = {
-      id: createId("mock-group"),
-      name: draft.groupName.trim(),
-      created_by: captain.user_id,
-      mode: draft.mode,
-      status: "ACTIVE",
-      expected_member_count:
-        draft.mode === "TOGETHER" ? draft.expectedMemberCount : members.length,
-      created_at: now,
-      activated_at: now,
-      calculation_version: 1,
-      members,
-    };
+    const participants = participantNames.map((nickname) => ({ nickname }));
+    const response = await fetch("/api/groups", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: draft.groupName.trim(),
+        mode: draft.mode,
+        expectedMemberCount:
+          draft.mode === "TOGETHER"
+            ? draft.expectedMemberCount
+            : participants.length + 1,
+        participants,
+      }),
+    });
+    const result = await readGroupResponse(response);
 
     if (draft.mode === "TOGETHER" && draft.inviteToken) {
       try {
@@ -153,9 +125,9 @@ export default function AuthenticatedApp({
       }
     }
 
-    saveGroup(group);
     replaceDraft({ ...draft, step: 3, completed: true });
-    router.push(`/groups/${encodeURIComponent(group.id)}`);
+    router.push(`/groups/${encodeURIComponent(result.group.id)}`);
+    return result.group;
   }
 
   async function logout() {
@@ -187,7 +159,11 @@ export default function AuthenticatedApp({
         selectedGroup ? (
           <GroupBoard
             group={selectedGroup}
-            currentMemberId={captain.id}
+            currentMemberId={
+              selectedGroup.members.find(
+                (member) => member.user_id === captain.user_id,
+              )?.id ?? captain.id
+            }
             receiptId={receiptId}
             onBack={showDashboard}
             onBackToGroup={() => router.back()}

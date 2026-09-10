@@ -580,9 +580,23 @@ function TogetherMemberStep({ captain, draft }) {
 }
 
 function ConfirmationStep({ captain, draft, onCreate }) {
+  const [isCreating, setIsCreating] = useState(false);
+  const [createError, setCreateError] = useState("");
   const participantNames = getDraftParticipantNames(draft);
   const allNames = [captain.nickname, ...participantNames];
   const modeLabel = draft.mode === "TOGETHER" ? "함께하기" : "혼자하기";
+
+  async function createGroup() {
+    setIsCreating(true);
+    setCreateError("");
+
+    try {
+      await onCreate();
+    } catch (error) {
+      setCreateError(error.message);
+      setIsCreating(false);
+    }
+  }
 
   return (
     <>
@@ -614,10 +628,18 @@ function ConfirmationStep({ captain, draft, onCreate }) {
         <button className={styles.secondaryButton} type="button" onClick={() => saveDraft({ step: 2 })}>
           이전
         </button>
-        <button className={styles.primaryButton} type="button" onClick={onCreate}>
-          모임 만들기
+        <button
+          className={styles.primaryButton}
+          type="button"
+          disabled={isCreating}
+          onClick={createGroup}
+        >
+          {isCreating ? "모임 만드는 중..." : "모임 만들기"}
         </button>
       </div>
+      {createError && (
+        <p className={styles.errorMessage} role="alert">{createError}</p>
+      )}
     </>
   );
 }

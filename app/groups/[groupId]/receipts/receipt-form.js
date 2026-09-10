@@ -83,6 +83,10 @@ function MemberCheckbox({
         disabled={disabled}
         onChange={(event) => onChange(event.target.checked)}
       />
+      {checked && disabled ? (
+        // disabled 입력값은 폼 제출에서 빠지므로 마지막 한 명의 ID를 별도로 전송한다.
+        <input name={name} type="hidden" value={member.id} />
+      ) : null}
       <span className="member-avatar member-avatar--small" aria-hidden="true">
         {member.nickname.slice(0, 1)}
       </span>

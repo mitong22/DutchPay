@@ -1,20 +1,12 @@
-import { MOCK_CAPTAIN } from "@/lib/mockCaptain";
-import { MOCK_ACCOUNT_COOKIE } from "@/lib/mockSession.mjs";
 import {
   createGroup,
   groupErrorResponse,
   listGroups,
 } from "@/lib/groups";
-
-function getCaptain(request) {
-  return request.cookies.get(MOCK_ACCOUNT_COOKIE)?.value ===
-    MOCK_CAPTAIN.user_id
-    ? MOCK_CAPTAIN
-    : null;
-}
+import { getMockCaptain } from "@/lib/mockApiAuth";
 
 export async function GET(request) {
-  const captain = getCaptain(request);
+  const captain = getMockCaptain(request);
 
   if (!captain) {
     return Response.json({ message: "로그인이 필요해요." }, { status: 401 });
@@ -28,7 +20,7 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
-  const captain = getCaptain(request);
+  const captain = getMockCaptain(request);
 
   if (!captain) {
     return Response.json({ message: "로그인이 필요해요." }, { status: 401 });

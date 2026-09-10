@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 import BrandLogo from "../brandLogo";
 import styles from "../app.module.css";
-import { readInviteResponse } from "@/lib/demoStore";
+import { readInviteResponse } from "@/lib/groupDraftStore";
 
 export default function InvitePage({ inviteToken }) {
   const router = useRouter();
@@ -44,9 +44,11 @@ export default function InvitePage({ inviteToken }) {
     }
 
     loadInvite();
+    const intervalId = window.setInterval(loadInvite, 1000);
 
     return () => {
       isCancelled = true;
+      window.clearInterval(intervalId);
     };
   }, [inviteToken]);
 
@@ -130,10 +132,20 @@ export default function InvitePage({ inviteToken }) {
               <div className={styles.joinCountBadge}>
                 {joinedCount} / {invite.expectedMemberCount}명 참여 완료
               </div>
-              {invite.currentMember.id === invite.captain.id && (
+              {invite.status === "ACTIVE" ? (
+                <button
+                  className={styles.primaryButton}
+                  type="button"
+                  onClick={() => router.push(`/groups/${encodeURIComponent(invite.groupId)}`)}
+                >
+                  모임 화면 열기
+                </button>
+              ) : invite.currentMember.id === invite.captain.id ? (
                 <button className={styles.secondaryButton} type="button" onClick={leaveInvite}>
                   내 정산으로 돌아가기
                 </button>
+              ) : (
+                <p>총대가 모임을 시작하면 이 화면에서 바로 들어갈 수 있어요.</p>
               )}
             </div>
           ) : invite.status !== "WAITING" ? (

@@ -16,7 +16,7 @@ import {
   readInviteResponse,
   saveDraft,
   saveInviteParticipants,
-} from "@/lib/demoStore";
+} from "@/lib/groupDraftStore";
 
 function ModeCards({ selectedMode, onSelect }) {
   return (
@@ -360,11 +360,6 @@ function TogetherMemberStep({ captain, draft }) {
         body: JSON.stringify({
           groupName: draft.groupName.trim(),
           expectedMemberCount: draft.expectedMemberCount,
-          captain: {
-            id: captain.id,
-            userId: captain.user_id,
-            nickname: captain.nickname,
-          },
         }),
       });
       const invite = await readInviteResponse(response);

@@ -8,9 +8,10 @@ import {
   calculateReceiptShares,
   findMember,
   formatWon,
-} from "@/lib/receiptStore";
+} from "@/lib/receiptUtils";
 
 export default function ReceiptDetail({
+  canEdit,
   currentMemberId,
   group,
   isReadOnly,
@@ -21,6 +22,7 @@ export default function ReceiptDetail({
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isDeleteConfirming, setIsDeleteConfirming] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [actionMessage, setActionMessage] = useState("");
   const payer = findMember(group, receipt.paid_by_member_id);
   const participantMembers = (receipt.participant_member_ids ?? [])
@@ -39,22 +41,24 @@ export default function ReceiptDetail({
         group={group}
         initialReceipt={receipt}
         onClose={() => setIsEditing(false)}
-        onSave={(updatedReceipt) => {
-          const isSaved = onUpdate(updatedReceipt);
-
-          if (isSaved) {
-            setIsEditing(false);
-          }
-
-          return isSaved;
+        onSave={async (updatedReceipt) => {
+          await onUpdate(updatedReceipt);
+          setIsEditing(false);
+          return true;
         }}
       />
     );
   }
 
-  function handleDelete() {
-    if (!onDelete(receipt.id)) {
-      setActionMessage("영수증을 삭제하지 못했어요. 다시 시도해 주세요.");
+  async function handleDelete() {
+    setIsDeleting(true);
+    setActionMessage("");
+
+    try {
+      await onDelete(receipt.id);
+    } catch (error) {
+      setActionMessage(error.message);
+      setIsDeleting(false);
     }
   }
 
@@ -66,7 +70,7 @@ export default function ReceiptDetail({
         </button>
         {isReadOnly ? (
           <span className={styles.readOnlyBadge}>완료된 정산 · 읽기 전용</span>
-        ) : (
+        ) : canEdit ? (
           <div className={styles.detailActions}>
             <button
               className={styles.secondaryButton}
@@ -89,6 +93,10 @@ export default function ReceiptDetail({
               삭제
             </button>
           </div>
+        ) : (
+          <span className={styles.readOnlyBadge}>
+            다른 참여자가 등록 · 보기 전용
+          </span>
         )}
       </div>
 
@@ -353,6 +361,7 @@ export default function ReceiptDetail({
             <button
               className={styles.secondaryButton}
               type="button"
+              disabled={isDeleting}
               onClick={() => setIsDeleteConfirming(false)}
             >
               취소
@@ -360,9 +369,10 @@ export default function ReceiptDetail({
             <button
               className={styles.confirmDeleteButton}
               type="button"
+              disabled={isDeleting}
               onClick={handleDelete}
             >
-              삭제하기
+              {isDeleting ? "삭제 중..." : "삭제하기"}
             </button>
           </div>
         </div>

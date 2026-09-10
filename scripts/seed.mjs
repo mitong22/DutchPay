@@ -21,10 +21,10 @@ const ids = {
   user: "mock-user-001",
   activeGroup: "seed-group-active",
   completedGroup: "seed-group-completed",
-  activeCaptain: "seed-member-active-miyeon",
+  activeCaptain: "seed-member-active-yunha",
   jihyun: "seed-member-active-jihyun",
   sumin: "seed-member-active-sumin",
-  completedCaptain: "seed-member-completed-miyeon",
+  completedCaptain: "seed-member-completed-yunha",
   minjae: "seed-member-completed-minjae",
   dinnerReceipt: "seed-receipt-dinner",
   cafeReceipt: "seed-receipt-cafe",
@@ -48,7 +48,7 @@ const members = [
     _id: ids.activeCaptain,
     group_id: ids.activeGroup,
     user_id: ids.user,
-    nickname: "미연",
+    nickname: "윤하",
     member_type: "registered",
   },
   {
@@ -69,7 +69,7 @@ const members = [
     _id: ids.completedCaptain,
     group_id: ids.completedGroup,
     user_id: ids.user,
-    nickname: "미연",
+    nickname: "윤하",
     member_type: "registered",
   },
   {
@@ -203,7 +203,15 @@ async function createIndexes(db) {
       },
     ),
     db.collection("group_invite").createIndex({ token_hash: 1 }, { unique: true }),
+    db.collection("group_invite").createIndex(
+      { expires_at: 1 },
+      { expireAfterSeconds: 0 },
+    ),
     db.collection("guest_session").createIndex({ token_hash: 1 }, { unique: true }),
+    db.collection("guest_session").createIndex(
+      { expires_at: 1 },
+      { expireAfterSeconds: 0 },
+    ),
     db.collection("receipts").createIndex({ group_id: 1, created_at: -1 }),
     db.collection("payment").createIndex({ group_id: 1, receipt_id: 1 }),
     db.collection("payment").createIndex(
@@ -233,10 +241,27 @@ try {
   const db = client.db(databaseName);
   await createIndexes(db);
   await db.collection("user").deleteOne({ _id: "seed-user-miyeon" });
+  await Promise.all([
+    db.collection("group_member").deleteMany({
+      group_id: { $in: [ids.activeGroup, ids.completedGroup] },
+    }),
+    db.collection("receipts").deleteMany({
+      group_id: { $in: [ids.activeGroup, ids.completedGroup] },
+    }),
+    db.collection("payment").deleteMany({
+      group_id: { $in: [ids.activeGroup, ids.completedGroup] },
+    }),
+    db.collection("group_invite").deleteMany({
+      group_id: { $in: [ids.activeGroup, ids.completedGroup] },
+    }),
+    db.collection("guest_session").deleteMany({
+      group_id: { $in: [ids.activeGroup, ids.completedGroup] },
+    }),
+  ]);
   await upsertDocuments(db, "user", [
     {
       _id: ids.user,
-      name: "미연",
+      name: "윤하",
       email: "demo@dutchpay.local",
       emailVerified: true,
       createdAt: dates.completedCreated,

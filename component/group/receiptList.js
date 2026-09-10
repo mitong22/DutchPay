@@ -4,7 +4,7 @@ import {
   calculateSettlementTransfers,
   findMember,
   formatWon,
-} from "@/lib/receiptStore";
+} from "@/lib/receiptUtils";
 
 export default function ReceiptList({
   currentMemberId,

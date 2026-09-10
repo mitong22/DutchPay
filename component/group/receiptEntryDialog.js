@@ -9,7 +9,7 @@ import {
   createMenuDraft,
   findMember,
   formatWon,
-} from "@/lib/receiptStore";
+} from "@/lib/receiptUtils";
 
 export default function ReceiptEntryDialog({
   currentMemberId,
@@ -40,6 +40,7 @@ export default function ReceiptEntryDialog({
       : [createMenuDraft(initialMemberIds)],
   );
   const [validationMessage, setValidationMessage] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
   const selectedDescription = RECEIPT_METHODS.find(
     (method) => method.id === selectedMethod,
   )?.description;
@@ -123,7 +124,7 @@ export default function ReceiptEntryDialog({
     );
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
 
     const normalizedTitle = title.trim();
@@ -211,8 +212,15 @@ export default function ReceiptEntryDialog({
       updated_at: savedAt,
     };
 
-    if (!onSave(receipt)) {
-      setValidationMessage("브라우저에 저장하지 못했어요. 다시 시도해 주세요.");
+    setIsSaving(true);
+    setValidationMessage("");
+
+    try {
+      await onSave(receipt);
+    } catch (error) {
+      setValidationMessage(error.message);
+    } finally {
+      setIsSaving(false);
     }
   }
 
@@ -479,12 +487,21 @@ export default function ReceiptEntryDialog({
               <button
                 className={styles.secondaryButton}
                 type="button"
+                disabled={isSaving}
                 onClick={onClose}
               >
                 {isEditing ? "수정 취소" : "취소"}
               </button>
-              <button className={styles.primaryButton} type="submit">
-                {isEditing ? "변경사항 저장" : "영수증 저장"}
+              <button
+                className={styles.primaryButton}
+                type="submit"
+                disabled={isSaving}
+              >
+                {isSaving
+                  ? "저장 중..."
+                  : isEditing
+                    ? "변경사항 저장"
+                    : "영수증 저장"}
               </button>
             </div>
           </form>

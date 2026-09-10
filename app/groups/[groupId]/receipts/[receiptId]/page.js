@@ -1,25 +1,23 @@
 import { redirect } from "next/navigation";
 
 import AuthenticatedApp from "@/component/authenticatedApp";
-import { getGroup } from "@/lib/groups";
 import { MOCK_CAPTAIN } from "@/lib/mockCaptain";
-import { hasMockSession } from "@/lib/mockPageAuth";
+import { getPageGroupView } from "@/lib/pageGroupView";
 
 export default async function ReceiptDetail({ params }) {
-  if (!(await hasMockSession())) {
-    redirect("/login");
-  }
-
   const { groupId, receiptId } = await params;
-  const group = await getGroup(groupId, MOCK_CAPTAIN.user_id);
+  const view = await getPageGroupView(groupId);
+
+  if (!view) redirect("/login");
 
   return (
     <AuthenticatedApp
       captain={MOCK_CAPTAIN}
-      groups={group ? [group] : []}
+      groups={[view.group]}
       page="receipt"
       groupId={groupId}
       receiptId={receiptId}
+      viewer={view.viewer}
     />
   );
 }

@@ -1,60 +1,79 @@
 "use client";
 
-import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 import ReceiptDetail from "./group/receiptDetail";
 import ReceiptEntryDialog from "./group/receiptEntryDialog";
 import ReceiptList from "./group/receiptList";
 import styles from "./groupBoard.module.css";
-import {
-  appendReceipt,
-  findMember,
-  getReceiptsSnapshot,
-  parseReceipts,
-  removeReceipt,
-  replaceReceipt,
-  subscribeToReceipts,
-} from "@/lib/receiptStore";
+import { findMember } from "@/lib/receiptUtils";
 
-export { calculateGroupSettlement } from "@/lib/receiptStore";
+export { calculateGroupSettlement } from "@/lib/receiptUtils";
 
 export default function GroupBoard({
   currentMemberId,
   group,
+  isCaptain,
   receiptId = null,
   onBack,
   onBackToGroup,
   onComplete,
   onOpenReceipt,
 }) {
+  const router = useRouter();
   const [isReceiptDialogOpen, setIsReceiptDialogOpen] = useState(false);
   const [isCompletionConfirming, setIsCompletionConfirming] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [completionError, setCompletionError] = useState("");
-  const initialReceiptsSnapshot = useMemo(
-    () => JSON.stringify(group.receipts ?? []),
-    [group.receipts],
-  );
-  const readReceiptSnapshot = useCallback(
-    () => getReceiptsSnapshot(group.id, initialReceiptsSnapshot),
-    [group.id, initialReceiptsSnapshot],
-  );
-  const readInitialReceiptsSnapshot = useCallback(
-    () => initialReceiptsSnapshot,
-    [initialReceiptsSnapshot],
-  );
-  const receiptsSnapshot = useSyncExternalStore(
-    subscribeToReceipts,
-    readReceiptSnapshot,
-    readInitialReceiptsSnapshot,
-  );
-  const receipts = parseReceipts(receiptsSnapshot);
+  const receipts = group.receipts ?? [];
   const selectedReceipt = receipts.find(
     (receipt) => receipt.id === receiptId,
   );
   const currentMember = findMember(group, currentMemberId);
-  const isCaptain = currentMember?.member_type === "registered";
   const isCompleted = group.status === "COMPLETED";
+
+  async function requestReceipt(path, options) {
+    const response = await fetch(path, options);
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(result.message ?? "영수증을 처리하지 못했어요.");
+    }
+
+    router.refresh();
+    return result;
+  }
+
+  async function saveReceipt(receipt) {
+    const isEditing = receipts.some(
+      (currentReceipt) => currentReceipt.id === receipt.id,
+    );
+    const path = isEditing
+      ? `/api/groups/${encodeURIComponent(group.id)}/receipts/${encodeURIComponent(receipt.id)}`
+      : `/api/groups/${encodeURIComponent(group.id)}/receipts`;
+
+    await requestReceipt(path, {
+      method: isEditing ? "PATCH" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(receipt),
+    });
+    return true;
+  }
+
+  async function deleteReceipt(receiptId) {
+    const path = `/api/groups/${encodeURIComponent(group.id)}/receipts/${encodeURIComponent(receiptId)}`;
+    const response = await fetch(path, { method: "DELETE" });
+
+    if (!response.ok) {
+      const result = await response.json().catch(() => ({}));
+      throw new Error(result.message ?? "영수증을 삭제하지 못했어요.");
+    }
+
+    showReceiptList();
+    router.refresh();
+    return true;
+  }
 
   function showReceipt(nextReceiptId) {
     onOpenReceipt(nextReceiptId);
@@ -70,7 +89,7 @@ export default function GroupBoard({
         <button type="button" onClick={onBack}>← 대시보드</button>
         <div className={styles.boardStatusActions}>
           <span>
-            {group.mode === "TOGETHER" ? "함께하기" : "혼자하기"} · 총대 계정에 저장됨
+            {group.mode === "TOGETHER" ? "함께하기" : "혼자하기"} · {isCaptain ? "총대 계정에 저장됨" : "초대 참여자 화면"}
           </span>
           {isCompleted ? (
             <strong className={styles.completedBadge}>✓ 정산 완료</strong>
@@ -80,21 +99,18 @@ export default function GroupBoard({
 
       {selectedReceipt ? (
         <ReceiptDetail
+          canEdit={
+            !isCompleted &&
+            (isCaptain ||
+              selectedReceipt.uploaded_by_member_id === currentMemberId)
+          }
           currentMemberId={currentMemberId}
           group={group}
           isReadOnly={isCompleted}
           receipt={selectedReceipt}
           onBack={showReceiptList}
-          onDelete={(receiptId) => {
-            const isRemoved = removeReceipt(group.id, receiptId, receipts);
-
-            if (isRemoved) {
-              showReceiptList();
-            }
-
-            return isRemoved;
-          }}
-          onUpdate={(receipt) => replaceReceipt(group.id, receipt, receipts)}
+          onDelete={deleteReceipt}
+          onUpdate={saveReceipt}
         />
       ) : (
         <>
@@ -165,14 +181,10 @@ export default function GroupBoard({
           currentMemberId={currentMemberId}
           group={group}
           onClose={() => setIsReceiptDialogOpen(false)}
-          onSave={(receipt) => {
-            const isSaved = appendReceipt(group.id, receipt, receipts);
-
-            if (isSaved) {
-              setIsReceiptDialogOpen(false);
-            }
-
-            return isSaved;
+          onSave={async (receipt) => {
+            await saveReceipt(receipt);
+            setIsReceiptDialogOpen(false);
+            return true;
           }}
         />
       )}

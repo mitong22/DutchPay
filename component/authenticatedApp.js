@@ -18,8 +18,8 @@ import {
   readInviteResponse,
   replaceDraft,
   saveDraft,
-  subscribeToDemoStore,
-} from "@/lib/demoStore";
+  subscribeToDraftStore,
+} from "@/lib/groupDraftStore";
 
 async function readGroupResponse(response) {
   const result = await response.json().catch(() => ({}));
@@ -37,10 +37,11 @@ export default function AuthenticatedApp({
   page = "dashboard",
   groupId = null,
   receiptId = null,
+  viewer = null,
 }) {
   const router = useRouter();
   const draftSnapshot = useSyncExternalStore(
-    subscribeToDemoStore,
+    subscribeToDraftStore,
     getDraftSnapshot,
     getServerDraftSnapshot,
   );
@@ -94,49 +95,53 @@ export default function AuthenticatedApp({
       throw new Error(message);
     }
 
-    const participantNames = getDraftParticipantNames(draft);
-    const participants = participantNames.map((nickname) => ({ nickname }));
-    const response = await fetch("/api/groups", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: draft.groupName.trim(),
-        mode: draft.mode,
-        expectedMemberCount:
-          draft.mode === "TOGETHER"
-            ? draft.expectedMemberCount
-            : participants.length + 1,
-        participants,
-      }),
-    });
-    const result = await readGroupResponse(response);
-
+    let groupId;
     if (draft.mode === "TOGETHER" && draft.inviteToken) {
-      try {
-        await readInviteResponse(
-          await fetch("/api/invites", {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ token: draft.inviteToken }),
-          }),
-        );
-      } catch {
-        // 모임 생성 자체는 브라우저 목업 흐름을 계속 진행한다.
-      }
+      const invite = await readInviteResponse(
+        await fetch("/api/invites", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: draft.inviteToken }),
+        }),
+      );
+      groupId = invite.groupId;
+    } else {
+      const participantNames = getDraftParticipantNames(draft);
+      const participants = participantNames.map((nickname) => ({ nickname }));
+      const response = await fetch("/api/groups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: draft.groupName.trim(),
+          mode: draft.mode,
+          expectedMemberCount: participants.length + 1,
+          participants,
+        }),
+      });
+      const result = await readGroupResponse(response);
+      groupId = result.group.id;
     }
 
     replaceDraft({ ...draft, step: 3, completed: true });
-    router.push(`/groups/${encodeURIComponent(result.group.id)}`);
-    return result.group;
+    router.push(`/groups/${encodeURIComponent(groupId)}`);
+    return groupId;
   }
 
-  async function logout() {
+  async function leaveAccount() {
+    if (viewer?.kind === "guest") {
+      router.push("/");
+      return;
+    }
+
     const response = await fetch("/api/mock-session", { method: "DELETE" });
 
     if (response.ok) {
       router.replace("/login");
     }
   }
+
+  const accountNickname = viewer?.nickname ?? captain.nickname;
+  const isGuest = viewer?.kind === "guest";
 
   return (
     <div className={styles.pageShell}>
@@ -146,11 +151,13 @@ export default function AuthenticatedApp({
         </button>
         <div className={styles.accountActions}>
           <div className={styles.captain}>
-            <span className={styles.captainLabel}>테스트 총대</span>
-            <strong>{captain.nickname}</strong>
+            <span className={styles.captainLabel}>
+              {isGuest ? "비회원 참여자" : "테스트 총대"}
+            </span>
+            <strong>{accountNickname}</strong>
           </div>
-          <button className={styles.logoutButton} type="button" onClick={logout}>
-            로그아웃
+          <button className={styles.logoutButton} type="button" onClick={leaveAccount}>
+            {isGuest ? "나가기" : "로그아웃"}
           </button>
         </div>
       </header>
@@ -159,14 +166,13 @@ export default function AuthenticatedApp({
         selectedGroup ? (
           <GroupBoard
             group={selectedGroup}
-            currentMemberId={
-              selectedGroup.members.find(
-                (member) => member.user_id === captain.user_id,
-              )?.id ?? captain.id
-            }
+            currentMemberId={viewer?.memberId ?? selectedGroup.members.find(
+              (member) => member.user_id === captain.user_id,
+            )?.id ?? captain.id}
+            isCaptain={viewer?.isCaptain ?? true}
             receiptId={receiptId}
-            onBack={showDashboard}
-            onBackToGroup={() => router.back()}
+            onBack={isGuest ? () => router.push("/") : showDashboard}
+            onBackToGroup={() => router.push(`/groups/${encodeURIComponent(selectedGroup.id)}`)}
             onComplete={() => completeGroup(selectedGroup.id)}
             onOpenReceipt={openReceipt}
           />

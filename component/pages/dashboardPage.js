@@ -3,7 +3,7 @@ import styles from "../app.module.css";
 import {
   formatSavedDate,
   formatWon,
-} from "@/lib/demoStore";
+} from "@/lib/groupDraftStore";
 
 export default function DashboardPage({
   captain,

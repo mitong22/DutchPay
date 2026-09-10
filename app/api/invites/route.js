@@ -9,8 +9,8 @@ import {
   joinMockInvite,
   removeMockInviteParticipant,
 } from "@/lib/mockInviteStore.mjs";
+import { MOCK_ACCOUNT_COOKIE } from "@/lib/mockSession.mjs";
 
-const MOCK_ACCOUNT_COOKIE = "dutchpay_mock_user";
 const GUEST_SESSION_COOKIE = "dutchpay_guest_session";
 const COOKIE_OPTIONS = {
   httpOnly: true,
@@ -76,9 +76,13 @@ export async function POST(request) {
     return errorResponse("초대 정보를 확인해 주세요.", 400);
   }
 
-  const invite = createMockInvite({ captain, expectedMemberCount, groupName });
   const cookieStore = await cookies();
-  cookieStore.set(MOCK_ACCOUNT_COOKIE, captain.userId, COOKIE_OPTIONS);
+
+  if (cookieStore.get(MOCK_ACCOUNT_COOKIE)?.value !== captain.userId) {
+    return errorResponse("로그인한 총대만 초대 링크를 만들 수 있어요.", 401);
+  }
+
+  const invite = createMockInvite({ captain, expectedMemberCount, groupName });
 
   return Response.json({ invite: publicInvite(invite) }, { status: 201 });
 }

@@ -2,6 +2,87 @@
   min-height: 100vh;
 }
 
+.loginShell {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(116, 132, 245, 0.2), transparent 34%),
+    var(--background);
+}
+
+.header.loginHeader {
+  border-bottom: 0;
+  background: transparent;
+}
+
+.loginHeader .brand {
+  cursor: default;
+}
+
+.loginHeader > span:last-child {
+  padding: 6px 10px;
+  border: 1px solid #d9def5;
+  border-radius: 999px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.72);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.main.loginMain {
+  display: grid;
+  width: min(440px, calc(100% - 32px));
+  min-height: calc(100vh - 72px);
+  place-items: center;
+  padding: 40px 0 80px;
+}
+
+.card.loginCard {
+  width: 100%;
+}
+
+.testCredentials {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 24px 0;
+  padding: 12px;
+  border-radius: 14px;
+  background: #f2f4ff;
+}
+
+.testCredentials > div {
+  display: grid;
+  gap: 5px;
+  padding: 4px 7px;
+}
+
+.testCredentials dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.testCredentials dd {
+  margin: 0;
+  color: var(--primary-dark);
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.loginForm {
+  display: grid;
+  gap: 9px;
+}
+
+.loginForm .fieldLabel {
+  margin-top: 7px;
+}
+
+.loginForm .primaryButton {
+  width: 100%;
+  margin-top: 16px;
+}
+
 .header {
   display: flex;
   align-items: center;
@@ -28,6 +109,29 @@
   align-items: center;
   gap: 8px;
   font-size: 0.95rem;
+}
+
+.accountActions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.logoutButton {
+  padding: 7px 10px;
+  border: 1px solid #d8def2;
+  border-radius: 9px;
+  color: var(--muted);
+  background: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.logoutButton:hover {
+  color: var(--primary-dark);
+  border-color: #acb6ee;
+  background: #f7f8ff;
 }
 
 .captainLabel {
@@ -1113,6 +1217,16 @@
 }
 
 @media (max-width: 640px) {
+  .main.loginMain {
+    min-height: calc(100vh - 64px);
+    padding: 28px 0 52px;
+  }
+
+  .card.loginCard {
+    padding: 26px 22px;
+    border-radius: 20px;
+  }
+
   .header {
     min-height: 64px;
     padding: 0 20px;
@@ -1120,6 +1234,10 @@
 
   .captainLabel {
     display: none;
+  }
+
+  .accountActions {
+    gap: 9px;
   }
 
   .main {

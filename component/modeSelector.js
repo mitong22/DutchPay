@@ -4,6 +4,10 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 
 import GroupBoard, { calculateGroupSettlement } from "./groupBoard";
 import styles from "./modeSelector.module.css";
+import {
+  MOCK_LOGIN_ID,
+  MOCK_LOGIN_PASSWORD,
+} from "@/lib/mockSession.mjs";
 
 const LEGACY_MODE_KEY = "dutchpay:group-draft:mode";
 const DRAFT_KEY = "dutchpay:group-create-draft";
@@ -352,6 +356,275 @@ function formatSavedDate(value) {
 
 function resetPageScroll() {
   window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+}
+
+function getDemoData(captain) {
+  const captainMember = {
+    id: captain.id,
+    user_id: captain.user_id,
+    nickname: captain.nickname,
+    member_type: captain.member_type,
+  };
+  const activeMembers = [
+    captainMember,
+    {
+      id: "demo-active-member-jihyun",
+      user_id: null,
+      nickname: "지현",
+      member_type: "guest",
+    },
+    {
+      id: "demo-active-member-sumin",
+      user_id: null,
+      nickname: "수인",
+      member_type: "guest",
+    },
+  ];
+  const completedMembers = [
+    captainMember,
+    {
+      id: "demo-completed-member-minjae",
+      user_id: null,
+      nickname: "민재",
+      member_type: "guest",
+    },
+  ];
+  const groups = [
+    {
+      id: "demo-group-active",
+      name: "성수 저녁 모임",
+      created_by: captain.user_id,
+      mode: "TOGETHER",
+      status: "ACTIVE",
+      expected_member_count: 3,
+      created_at: "2026-09-09T09:00:00.000Z",
+      activated_at: "2026-09-09T09:10:00.000Z",
+      calculation_version: 1,
+      members: activeMembers,
+    },
+    {
+      id: "demo-group-completed",
+      name: "주말 카페 정산",
+      created_by: captain.user_id,
+      mode: "SOLO",
+      status: "COMPLETED",
+      expected_member_count: 2,
+      created_at: "2026-09-07T05:00:00.000Z",
+      activated_at: "2026-09-07T05:05:00.000Z",
+      completed_at: "2026-09-07T07:00:00.000Z",
+      calculation_version: 1,
+      members: completedMembers,
+    },
+  ];
+  const activeMemberIds = activeMembers.map((member) => member.id);
+  const completedMemberIds = completedMembers.map((member) => member.id);
+  const receiptsByGroup = {
+    "demo-group-active": [
+      {
+        id: "demo-receipt-dinner",
+        group_id: "demo-group-active",
+        title: "저녁 식사",
+        store_name: "저녁 식사",
+        total_amount: 66000,
+        paid_by_member_id: captain.id,
+        uploaded_by_member_id: captain.id,
+        participant_member_ids: activeMemberIds,
+        items: [
+          {
+            id: "demo-menu-dinner",
+            name: "저녁 세트",
+            menu_name: "저녁 세트",
+            quantity: 3,
+            unit_price: 18000,
+            amount: 54000,
+            line_total: 54000,
+            consumer_member_ids: activeMemberIds,
+          },
+          {
+            id: "demo-menu-drink",
+            name: "음료",
+            menu_name: "음료",
+            quantity: 3,
+            unit_price: 4000,
+            amount: 12000,
+            line_total: 12000,
+            consumer_member_ids: activeMemberIds,
+          },
+        ],
+        image_key: null,
+        input_method: "MANUAL",
+        ocr_status: "NONE",
+        status: "ACTIVE",
+        created_at: "2026-09-09T10:00:00.000Z",
+        updated_at: "2026-09-09T10:00:00.000Z",
+      },
+    ],
+    "demo-group-completed": [
+      {
+        id: "demo-receipt-cafe",
+        group_id: "demo-group-completed",
+        title: "카페",
+        store_name: "카페",
+        total_amount: 24000,
+        paid_by_member_id: captain.id,
+        uploaded_by_member_id: captain.id,
+        participant_member_ids: completedMemberIds,
+        items: [
+          {
+            id: "demo-menu-cafe",
+            name: "커피와 디저트",
+            menu_name: "커피와 디저트",
+            quantity: 2,
+            unit_price: 12000,
+            amount: 24000,
+            line_total: 24000,
+            consumer_member_ids: completedMemberIds,
+          },
+        ],
+        image_key: null,
+        input_method: "MANUAL",
+        ocr_status: "NONE",
+        status: "ACTIVE",
+        created_at: "2026-09-07T06:00:00.000Z",
+        updated_at: "2026-09-07T06:00:00.000Z",
+      },
+    ],
+  };
+
+  return { groups, receiptsByGroup };
+}
+
+function ensureDemoData(captain) {
+  try {
+    const { groups: demoGroups, receiptsByGroup } = getDemoData(captain);
+    const currentGroups = parseGroups(getGroupsSnapshot());
+    const missingGroups = demoGroups.filter(
+      (demoGroup) =>
+        !currentGroups.some((group) => group.id === demoGroup.id),
+    );
+    let didChange = false;
+
+    if (missingGroups.length > 0) {
+      window.localStorage.setItem(
+        GROUPS_KEY,
+        JSON.stringify([...missingGroups, ...currentGroups]),
+      );
+      didChange = true;
+    }
+
+    for (const [groupId, receipts] of Object.entries(receiptsByGroup)) {
+      const receiptKey = `dutchpay:receipts:${groupId}`;
+
+      if (window.localStorage.getItem(receiptKey) === null) {
+        window.localStorage.setItem(receiptKey, JSON.stringify(receipts));
+        didChange = true;
+      }
+    }
+
+    if (didChange) {
+      notifyStoreChange();
+    }
+  } catch {
+    // 브라우저 저장소를 사용할 수 없어도 로그인 흐름은 계속 진행한다.
+  }
+}
+
+function LoginScreen({ captain }) {
+  const [validationMessage, setValidationMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function login(event) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    setIsSubmitting(true);
+    setValidationMessage("");
+
+    try {
+      const response = await fetch("/api/mock-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          loginId: formData.get("loginId"),
+          password: formData.get("password"),
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message ?? "로그인하지 못했어요.");
+      }
+
+      ensureDemoData(captain);
+      window.location.reload();
+    } catch (error) {
+      setValidationMessage(error.message);
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <div className={styles.loginShell}>
+      <header className={`${styles.header} ${styles.loginHeader}`}>
+        <span className={styles.brand}>몫대로</span>
+        <span>테스트 환경</span>
+      </header>
+
+      <main className={`${styles.main} ${styles.loginMain}`}>
+        <section
+          className={`${styles.card} ${styles.loginCard}`}
+          aria-labelledby="login-title"
+        >
+          <div className={styles.intro}>
+            <p className={styles.eyebrow}>테스트 로그인</p>
+            <h1 id="login-title">몫대로 시작하기</h1>
+            <p>총대 계정으로 로그인해 정산 기능을 확인해 보세요.</p>
+          </div>
+
+          <dl className={styles.testCredentials} aria-label="테스트 계정 정보">
+            <div><dt>아이디</dt><dd>{MOCK_LOGIN_ID}</dd></div>
+            <div><dt>비밀번호</dt><dd>{MOCK_LOGIN_PASSWORD}</dd></div>
+          </dl>
+
+          <form className={styles.loginForm} onSubmit={login}>
+            <label className={styles.fieldLabel} htmlFor="login-id">아이디</label>
+            <input
+              className={styles.textInput}
+              id="login-id"
+              name="loginId"
+              type="text"
+              inputMode="numeric"
+              autoComplete="username"
+              placeholder={MOCK_LOGIN_ID}
+              required
+              onChange={() => setValidationMessage("")}
+            />
+            <label className={styles.fieldLabel} htmlFor="login-password">비밀번호</label>
+            <input
+              className={styles.textInput}
+              id="login-password"
+              name="password"
+              type="password"
+              inputMode="numeric"
+              autoComplete="current-password"
+              placeholder={MOCK_LOGIN_PASSWORD}
+              required
+              onChange={() => setValidationMessage("")}
+            />
+            {validationMessage && (
+              <p className={styles.errorMessage} role="alert">{validationMessage}</p>
+            )}
+            <button
+              className={styles.primaryButton}
+              type="submit"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "로그인 중..." : "로그인"}
+            </button>
+          </form>
+        </section>
+      </main>
+    </div>
+  );
 }
 
 function ModeCards({ selectedMode, onSelect }) {
@@ -1314,7 +1587,11 @@ function ConfirmationStep({ captain, draft, onCreate }) {
   );
 }
 
-export default function ModeSelector({ captain, inviteToken = "" }) {
+export default function ModeSelector({
+  captain,
+  inviteToken = "",
+  isAuthenticated = false,
+}) {
   const [screen, setScreen] = useState("dashboard");
   const [selectedGroupId, setSelectedGroupId] = useState(null);
   const draftSnapshot = useSyncExternalStore(
@@ -1332,10 +1609,20 @@ export default function ModeSelector({ captain, inviteToken = "" }) {
   const groups = parseGroups(groupsSnapshot);
   const selectedGroup = groups.find((group) => group.id === selectedGroupId);
 
+  useEffect(() => {
+    if (isAuthenticated && !inviteToken) {
+      ensureDemoData(captain);
+    }
+  }, [captain, inviteToken, isAuthenticated]);
+
   if (inviteToken) {
     return (
       <InviteJoinScreen inviteToken={inviteToken} />
     );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginScreen captain={captain} />;
   }
 
   function showDashboard() {
@@ -1446,15 +1733,28 @@ export default function ModeSelector({ captain, inviteToken = "" }) {
     resetPageScroll();
   }
 
+  async function logout() {
+    const response = await fetch("/api/mock-session", { method: "DELETE" });
+
+    if (response.ok) {
+      window.location.assign(window.location.pathname);
+    }
+  }
+
   return (
     <div className={styles.pageShell}>
       <header className={styles.header}>
         <button className={styles.brand} type="button" onClick={showDashboard}>
           몫대로
         </button>
-        <div className={styles.captain}>
-          <span className={styles.captainLabel}>테스트 총대</span>
-          <strong>{captain.nickname}</strong>
+        <div className={styles.accountActions}>
+          <div className={styles.captain}>
+            <span className={styles.captainLabel}>테스트 총대</span>
+            <strong>{captain.nickname}</strong>
+          </div>
+          <button className={styles.logoutButton} type="button" onClick={logout}>
+            로그아웃
+          </button>
         </div>
       </header>
 

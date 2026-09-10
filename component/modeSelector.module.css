@@ -5,7 +5,8 @@
 .loginShell {
   min-height: 100vh;
   background:
-    radial-gradient(circle at 18% 18%, rgba(116, 132, 245, 0.2), transparent 34%),
+    radial-gradient(circle at 14% 22%, rgba(116, 132, 245, 0.22), transparent 32%),
+    linear-gradient(135deg, #fbfcff 0%, #f1f3ff 100%),
     var(--background);
 }
 
@@ -30,14 +31,75 @@
 
 .main.loginMain {
   display: grid;
-  width: min(440px, calc(100% - 32px));
+  width: min(1080px, calc(100% - 48px));
   min-height: calc(100vh - 72px);
-  place-items: center;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 430px);
+  align-items: center;
+  gap: clamp(52px, 8vw, 104px);
   padding: 40px 0 80px;
+}
+
+.loginHero h1 {
+  max-width: 560px;
+  margin: 0;
+  font-size: clamp(2.65rem, 5vw, 4.35rem);
+  line-height: 1.12;
+  letter-spacing: -0.065em;
+}
+
+.loginHero > p:not(.eyebrow) {
+  max-width: 500px;
+  margin: 22px 0 0;
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1.75;
+}
+
+.loginSteps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 34px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.loginSteps li {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid rgba(210, 217, 246, 0.9);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.loginSteps span {
+  color: var(--primary);
+  font-size: 0.75rem;
+  font-weight: 900;
+}
+
+.loginSteps strong {
+  font-size: 0.88rem;
+  letter-spacing: -0.025em;
+  white-space: nowrap;
 }
 
 .card.loginCard {
   width: 100%;
+  padding: 38px;
+  box-shadow: 0 24px 70px rgba(59, 75, 157, 0.13);
+}
+
+.loginCard .intro {
+  margin-bottom: 24px;
+  text-align: left;
+}
+
+.loginCard .intro h2 {
+  margin: 0;
+  font-size: 2rem;
+  letter-spacing: -0.04em;
 }
 
 .testCredentials {
@@ -94,6 +156,9 @@
 }
 
 .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   padding: 0;
   border: 0;
   color: var(--primary);
@@ -102,6 +167,20 @@
   font-weight: 800;
   letter-spacing: -0.04em;
   cursor: pointer;
+}
+
+.brandIcon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 13px;
+  color: #ffffff;
+  background: var(--primary);
+  font-size: 1.5rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0;
 }
 
 .captain {
@@ -1218,8 +1297,36 @@
 
 @media (max-width: 640px) {
   .main.loginMain {
+    width: min(100% - 24px, 520px);
     min-height: calc(100vh - 64px);
-    padding: 28px 0 52px;
+    grid-template-columns: 1fr;
+    gap: 26px;
+    padding: 30px 0 52px;
+  }
+
+  .loginHero h1 {
+    font-size: clamp(2rem, 11vw, 2.75rem);
+  }
+
+  .loginHero > p:not(.eyebrow) {
+    margin-top: 16px;
+    font-size: 0.95rem;
+    line-height: 1.65;
+  }
+
+  .loginSteps {
+    gap: 7px;
+    margin-top: 22px;
+  }
+
+  .loginSteps li {
+    gap: 7px;
+    padding: 12px 10px;
+  }
+
+  .loginSteps strong {
+    font-size: 0.75rem;
+    white-space: normal;
   }
 
   .card.loginCard {
@@ -1230,6 +1337,18 @@
   .header {
     min-height: 64px;
     padding: 0 20px;
+  }
+
+  .brand {
+    gap: 8px;
+    font-size: 1.3rem;
+  }
+
+  .brandIcon {
+    width: 34px;
+    height: 34px;
+    border-radius: 11px;
+    font-size: 1.25rem;
   }
 
   .captainLabel {

@@ -529,6 +529,15 @@ function ensureDemoData(captain) {
   }
 }
 
+function BrandLogo() {
+  return (
+    <>
+      <span className={styles.brandIcon} aria-hidden="true">÷</span>
+      <span>몫대로</span>
+    </>
+  );
+}
+
 function LoginScreen({ captain }) {
   const [validationMessage, setValidationMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -565,19 +574,34 @@ function LoginScreen({ captain }) {
   return (
     <div className={styles.loginShell}>
       <header className={`${styles.header} ${styles.loginHeader}`}>
-        <span className={styles.brand}>몫대로</span>
+        <span className={styles.brand}><BrandLogo /></span>
         <span>테스트 환경</span>
       </header>
 
       <main className={`${styles.main} ${styles.loginMain}`}>
+        <section className={styles.loginHero} aria-labelledby="welcome-title">
+          <p className={styles.eyebrow}>영수증 기반 더치페이</p>
+          <h1 id="welcome-title">복잡한 정산,<br />먹은 만큼만 나눠요.</h1>
+          <p>
+            영수증을 모으고 메뉴별 참여자를 고르면
+            마지막 송금 금액까지 한눈에 확인할 수 있어요.
+          </p>
+
+          <ol className={styles.loginSteps} aria-label="몫대로 이용 순서">
+            <li><span>01</span><strong>영수증 등록</strong></li>
+            <li><span>02</span><strong>먹은 사람 선택</strong></li>
+            <li><span>03</span><strong>송금 금액 확인</strong></li>
+          </ol>
+        </section>
+
         <section
           className={`${styles.card} ${styles.loginCard}`}
           aria-labelledby="login-title"
         >
           <div className={styles.intro}>
-            <p className={styles.eyebrow}>테스트 로그인</p>
-            <h1 id="login-title">몫대로 시작하기</h1>
-            <p>총대 계정으로 로그인해 정산 기능을 확인해 보세요.</p>
+            <p className={styles.eyebrow}>총대 계정</p>
+            <h2 id="login-title">로그인</h2>
+            <p>테스트 계정으로 정산 기능을 확인해 보세요.</p>
           </div>
 
           <dl className={styles.testCredentials} aria-label="테스트 계정 정보">
@@ -1428,7 +1452,7 @@ function InviteJoinScreen({ inviteToken }) {
     <div className={styles.pageShell}>
       <header className={styles.header}>
         <button className={styles.brand} type="button" onClick={leaveInvite}>
-          몫대로
+          <BrandLogo />
         </button>
         <span className={styles.inviteHeaderLabel}>초대 참여</span>
       </header>
@@ -1745,7 +1769,7 @@ export default function ModeSelector({
     <div className={styles.pageShell}>
       <header className={styles.header}>
         <button className={styles.brand} type="button" onClick={showDashboard}>
-          몫대로
+          <BrandLogo />
         </button>
         <div className={styles.accountActions}>
           <div className={styles.captain}>

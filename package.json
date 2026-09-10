@@ -7,7 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test tests/*.test.mjs",
+    "db:start": "node scripts/local-mongo.mjs start",
+    "db:status": "node scripts/local-mongo.mjs status",
+    "db:stop": "node scripts/local-mongo.mjs stop",
+    "seed": "npm run db:start && node --env-file=.env.local scripts/seed.mjs"
   },
   "dependencies": {
     "@better-auth/mongo-adapter": "^1.7.3",

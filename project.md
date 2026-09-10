@@ -60,7 +60,7 @@ Mongoose, Prisma, Tailwind CSS, 별도 UI 컴포넌트 라이브러리, 별도 E
 | `app/api/groups/route.js` / POST `/api/groups` | 로그인 확인 후 모임 생성. 모임 ID와 개별 초대 경로 반환 |
 | `app/api/groups/[groupId]/route.js` / POST `/api/groups/:groupId` | `action`에 따라 영수증 저장·삭제, 개별 상태 변경, 정산 완료, 초대 링크 발급 |
 | `app/api/invites/[token]/route.js` / POST `/api/invites/:token` | 모임 참여 처리. 비회원이면 HttpOnly 게스트 쿠키 발급 |
-| `app/api/ocr/route.js` / POST `/api/ocr?groupId=...` | 접근 권한·진행 상태·파일 검사, 개발용 랜덤 데이터 또는 CLOVA 호출, 파싱 결과 반환 |
+| `app/api/ocr/route.js` / POST `/api/ocr?groupId=...` | 접근 권한·진행 상태·파일 검사 후 카메라와 사진 선택 모두 CLOVA를 호출하고 파싱 결과 반환 |
 | `app/api/client-errors/route.js` / POST `/api/client-errors` | 개발 환경에서 같은 출처의 클라이언트 오류를 받아 서버 콘솔과 로그 파일에 기록. 운영 환경에서는 404 |
 
 모임 API의 action은 `saveReceipt`, `deleteReceipt`, `setPaymentStatus`, `completeSettlement`, `createInvites`이다. 화면에서 버튼을 숨기는 것과 별개로 서버에서도 참여자·소유자·총대·모임 상태를 확인한다.
@@ -75,7 +75,7 @@ Mongoose, Prisma, Tailwind CSS, 별도 UI 컴포넌트 라이브러리, 별도 E
 | `lib/group-state.mjs` | 대기 여부, 완료 여부, 총대의 완료 가능 여부를 판단하는 공통 함수 |
 | `lib/guest-session.mjs` | 모임별 게스트 쿠키 이름과 읽기를 통일. 기존 단일 쿠키도 호환해서 읽음 |
 | `lib/settlement.mjs` | 원 단위 분할 `splitAmount`, 참여자별 영수증 필터, 부담액·결제액·잔액·송금 안내 계산, payment 금액 계산 |
-| `lib/clova-ocr.mjs` | General OCR의 글자 좌표를 행으로 묶고 상품명·수량·가격을 추출. Document OCR 형태의 receipt 응답도 파싱 가능. 랜덤 목업 선택 함수 포함 |
+| `lib/clova-ocr.mjs` | General OCR의 글자 좌표를 행으로 묶고 상품명·수량·가격을 추출. Document OCR 형태의 receipt 응답도 파싱 가능. 저장 응답용 테스트 함수 포함 |
 | `lib/client-log.mjs` | 로그 내 토큰·비밀번호 등 마스킹, `sendBeacon`으로 개발 서버에 오류 전송. 페이지 모듈 기준 최대 20회 전송 |
 | `instrumentation-client.js` | 브라우저 error와 unhandledrejection 이벤트를 등록해 오류 수집 함수로 전달 |
 
@@ -85,7 +85,7 @@ Mongoose, Prisma, Tailwind CSS, 별도 UI 컴포넌트 라이브러리, 별도 E
 
 | 파일 / 폴더 | 역할 |
 | --- | --- |
-| `seed/clova_general_raw_90_array.json` | 저장된 General OCR 응답 90개. 개발 환경의 사진 선택 목업과 파서 테스트에 사용. DB를 자동 초기화하는 스크립트는 아님 |
+| `seed/clova_general_raw_90_array.json` | 저장된 General OCR 응답 90개. OCR 파서 회귀 테스트에만 사용하며 앱의 사진 선택에서는 사용하지 않음 |
 | `tests/clova-ocr.test.mjs` | Document 응답·General 좌표·랜덤 목업·GS25 식별번호 오인식·할인 후 합계 회귀 테스트. GS25 사례는 사진 기반 합성 응답 |
 | `tests/settlement.test.mjs` | 사용자별 영수증 필터 및 정산 금액 보존 검사 |
 | `tests/group-state.test.mjs` | 대기·완료 상태와 총대 완료 권한 검사 |
@@ -144,7 +144,7 @@ MongoDB에서는 SQL 컬럼 대신 문서의 필드로 데이터를 저장한다
 
 1. `ReceiptEditor`에서 수동 입력하거나 사진을 고른다. 미리보기는 브라우저 Blob URL을 사용하고 해제 시 정리한다.
 2. `/api/ocr`는 그룹 접근·진행 상태와 JPG/PNG·10MB 제한을 검사한다.
-3. 개발 환경의 `source=photo`는 90개 저장 응답에서 랜덤 데이터를 가져온다. 카메라 경로와 운영 환경 사진 경로는 CLOVA를 호출한다.
+3. 카메라와 사진 선택 모두 선택한 파일을 서버의 CLOVA OCR 경로로 전송한다.
 4. CLOVA 요청은 서버에서 HTTPS Invoke URL과 Secret을 사용하며 30초 제한을 둔다.
 5. General 응답의 boundingPoly 좌표를 행으로 묶어 상품명·수량·금액을 추출한다. 가격은 엄격한 숫자 형식을 사용하고 상품으로 볼 수 없는 행은 제외한다.
 6. 결과를 가게명·메뉴명·수량·단가에 반영한다. 소비자는 일단 본인으로 선택되므로 실제 먹은 사람을 확인해야 한다.
@@ -179,7 +179,7 @@ MongoDB에서는 SQL 컬럼 대신 문서의 필드로 데이터를 저장한다
 | `CLOVA_OCR_INVOKE_URL` | 서버가 호출할 CLOVA OCR HTTPS 주소 |
 | `CLOVA_OCR_SECRET` | CLOVA 요청 인증 Secret. 서버 전용 |
 | `DEMO_ACCOUNT_EMAIL`, `DEMO_ACCOUNT_PASSWORD` | 개발용 간편 로그인 별칭을 실제 테스트 계정 자격 증명으로 변환 |
-| `NODE_ENV` | 개발·운영에 따른 목업·로그·쿠키·테스트 로그인 분기 |
+| `NODE_ENV` | 개발·운영에 따른 로그·쿠키·테스트 로그인 분기 |
 
 실제 비밀번호·URI·Secret은 이 문서에 복사하지 않는다. `.env*`는 Git 제외 대상이다. Better Auth의 현재 설정에는 별도 `trustedOrigins` 목록이 명시되어 있지 않다.
 
@@ -221,7 +221,7 @@ npm run logs:client
 
 - 총대의 전체 정산 완료와 payment의 개별 paid/unpaid는 별개다. 상세 체크박스 UI는 제거됐지만 개별 상태 변경 API와 DB 문서는 남아 있다.
 - SOLO 설명에는 총대가 전체를 정리한다고 되어 있지만 현재 저장 로직은 모든 모드에서 결제자를 본인으로 고정한다. 다른 사람이 결제한 영수증을 총대가 대신 입력하는 기능은 제공하지 않는다.
-- 사진 선택은 개발 중 랜덤 목업이다. 실제 사진 인식을 시험할 때 입력 경로를 구분해야 한다.
+- 카메라와 사진 선택 모두 실제 CLOVA 사용량에 포함된다. 개발 중 반복 테스트는 저장 응답을 사용하는 자동 테스트로 수행한다.
 - OCR 회귀 테스트의 GS25 데이터는 사진을 보고 구성한 합성 좌표 응답이며 원본 사진을 재호출한 테스트가 아니다. 90개 저장 응답을 검사했을 때 50개가 파싱되고 40개가 거절됐다. 이는 상품 정답 정확도 지표가 아니다.
 - 정산 계산은 입력 메뉴 금액에 의존한다. 할인·누락을 확인하지 않고 차이가 있는 합계로 저장하면 해당 합계로 정산된다.
 - 토큰 만료는 조회 조건에서 검사한다. 소스에 컬렉션 인덱스/TTL을 자동 생성하는 코드가 없으므로 Atlas에 이미 설정된 인덱스의 존재 여부는 별도 확인 대상이다.

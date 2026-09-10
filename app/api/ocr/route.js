@@ -1,13 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import { cookies } from "next/headers";
 
 import { auth } from "@/lib/auth";
-import {
-  parseClovaReceipt,
-  randomClovaReceipt,
-} from "@/lib/clova-ocr.mjs";
+import { parseClovaReceipt } from "@/lib/clova-ocr.mjs";
 import {
   errorResponse,
   getGroupViewer,
@@ -20,8 +15,6 @@ const FORMATS = new Map([
   ["image/jpeg", "jpg"],
   ["image/png", "png"],
 ]);
-let mockPayloadsPromise;
-
 function fail(status, message) {
   const error = new Error(message);
   error.status = status;
@@ -55,20 +48,6 @@ export async function POST(request) {
 
     const format = FORMATS.get(file.type);
     if (!format) fail(415, "JPG 또는 PNG 영수증만 인식할 수 있습니다.");
-
-    if (source === "photo" && process.env.NODE_ENV !== "production") {
-      try {
-        mockPayloadsPromise ??= readFile(
-          join(process.cwd(), "seed", "clova_general_raw_90_array.json"),
-          "utf8",
-        ).then(JSON.parse);
-        const payloads = await mockPayloadsPromise;
-        return Response.json(randomClovaReceipt(payloads));
-      } catch (error) {
-        console.error("Mock OCR failed:", error);
-        fail(500, "목업 영수증 데이터를 읽지 못했어요.");
-      }
-    }
 
     const invokeUrl = process.env.CLOVA_OCR_INVOKE_URL;
     const secret = process.env.CLOVA_OCR_SECRET;

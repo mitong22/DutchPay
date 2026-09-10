@@ -205,11 +205,7 @@ function ReceiptEditor({ draft, groupId, members, onClose, onSave, saving }) {
             </label>
             {photoFile && (
               <button className="primary-button" type="button" onClick={readReceipt} disabled={reading}>
-                {reading
-                  ? "영수증 읽는 중..."
-                  : tab === "photo"
-                    ? "랜덤 영수증 불러오기"
-                    : "CLOVA OCR로 읽기"}
+                {reading ? "영수증 읽는 중..." : "영수증 인식"}
               </button>
             )}
             {ocrError && <p className="form-error" role="alert">{ocrError}</p>}

@@ -58,6 +58,10 @@ async function getRequestInvite(request) {
   return { body, invite: getMockInvite(token) };
 }
 
+// 운영 DB 전환 위치:
+// POST=초대 insertOne, GET=토큰 findOne, PATCH=참여자 조건부 updateOne,
+// DELETE=참여자 제거 updateOne, PUT=모임 상태 updateOne으로 교체한다.
+// captain 값도 요청 body를 신뢰하지 않고 Better Auth 세션과 DB에서 가져온다.
 export async function POST(request) {
   const body = await readBody(request);
   const groupName = typeof body?.groupName === "string" ? body.groupName.trim() : "";

@@ -643,6 +643,11 @@
   color: #959bb0;
 }
 
+.textInput:disabled {
+  color: #777e91;
+  background: #f2f3f7;
+}
+
 .captainRow {
   display: flex;
   align-items: center;
@@ -802,7 +807,8 @@
   text-decoration: none;
 }
 
-.joinButton:disabled {
+.joinButton:disabled,
+.issueInviteButton:disabled {
   color: #8d93a7;
   background: #e9ebf1;
   cursor: not-allowed;
@@ -962,6 +968,13 @@
 .inviteJoinForm .primaryButton {
   width: 100%;
   margin-top: 4px;
+}
+
+.identityNotice {
+  margin: -4px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
 }
 
 .inviteState {

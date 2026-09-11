@@ -21,6 +21,7 @@ import {
   subscribeToDraftStore,
 } from "@/lib/groupDraftStore";
 
+// fun readGroupResponse. 그룹 응답 읽어오기 및 예외 처리
 async function readGroupResponse(response) {
   const result = await response.json().catch(() => ({}));
 
@@ -31,6 +32,7 @@ async function readGroupResponse(response) {
   return result;
 }
 
+// fun AuthenticatedApp. 앱 권한 체크
 export default function AuthenticatedApp({
   captain,
   groups = [],
@@ -39,11 +41,19 @@ export default function AuthenticatedApp({
   receiptId = null,
   viewer = null,
 }) {
+
+  // router 이동용 객체
   const router = useRouter();
+    //  - push: 이전 페이지 기록 남기고 이동
+    //  - replace: 현재 페이지 기록 교체하며 이동
+    //  - refresh: 현재 페이지 서버 데이터 다시 불러오기
+  
+  // 변경 될 때마다 화면을 다시 그리기 위한 스냅샷
   const draftSnapshot = useSyncExternalStore(
-    subscribeToDraftStore,
-    getDraftSnapshot,
-    getServerDraftSnapshot,
+    // groupDraftStore 정의 함수들
+    subscribeToDraftStore, // 저장 데이터 변경 여부 판단
+    getDraftSnapshot, // 브라우저에서 현재 저장 데이터 가져오기
+    getServerDraftSnapshot, // 서버 렌더링시 사용할 기본 데이터 가져오기
   );
   const draft = parseDraft(draftSnapshot);
   const selectedGroup = groups.find((group) => group.id === groupId);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import styles from "../groupBoard.module.css";
 import {
@@ -10,6 +10,14 @@ import {
   findMember,
   formatWon,
 } from "@/lib/receiptUtils";
+
+const MAX_RECEIPT_IMAGE_BYTES = 10 * 1024 * 1024;
+const RECEIPT_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+]);
 
 export default function ReceiptEntryDialog({
   currentMemberId,
@@ -41,6 +49,9 @@ export default function ReceiptEntryDialog({
   );
   const [validationMessage, setValidationMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisMetadata, setAnalysisMetadata] = useState(null);
+  const analysisController = useRef(null);
   const selectedDescription = RECEIPT_METHODS.find(
     (method) => method.id === selectedMethod,
   )?.description;
@@ -64,6 +75,11 @@ export default function ReceiptEntryDialog({
   function selectMethod(methodId) {
     setSelectedMethod(methodId);
     setValidationMessage("");
+  }
+
+  function handleClose() {
+    analysisController.current?.abort();
+    onClose();
   }
 
   function toggleReceiptParticipant(memberId) {
@@ -122,6 +138,65 @@ export default function ReceiptEntryDialog({
     setItems((currentItems) =>
       currentItems.filter((item) => item.id !== itemId),
     );
+  }
+
+  async function handlePhotoSelected(event) {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+
+    if (!file) return;
+
+    if (!RECEIPT_IMAGE_TYPES.has(file.type)) {
+      setValidationMessage("JPEG, PNG, WebP 형식의 영수증 사진만 올릴 수 있어요.");
+      input.value = "";
+      return;
+    }
+
+    if (file.size > MAX_RECEIPT_IMAGE_BYTES) {
+      setValidationMessage("영수증 사진은 10MB 이하만 올릴 수 있어요.");
+      input.value = "";
+      return;
+    }
+
+    const formData = new FormData();
+    const controller = new AbortController();
+    formData.append("receipt", file);
+    formData.append("input_method", selectedMethod.toUpperCase());
+    analysisController.current = controller;
+    setIsAnalyzing(true);
+    setValidationMessage("");
+
+    try {
+      const response = await fetch(
+        `/api/groups/${encodeURIComponent(group.id)}/receipts/analyze`,
+        { method: "POST", body: formData, signal: controller.signal },
+      );
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(result.message ?? "영수증 사진을 분석하지 못했어요.");
+      }
+
+      setTitle(result.store_name);
+      setItems(
+        result.items.map((item) =>
+          createMenuDraft(participantMemberIds, item),
+        ),
+      );
+      setAnalysisMetadata({
+        image_key: result.image_key,
+        input_method: result.input_method,
+        ocr_status: result.ocr_status,
+      });
+    } catch (error) {
+      if (error.name !== "AbortError") setValidationMessage(error.message);
+    } finally {
+      if (analysisController.current === controller) {
+        analysisController.current = null;
+      }
+      setIsAnalyzing(false);
+      input.value = "";
+    }
   }
 
   async function handleSubmit(event) {
@@ -204,9 +279,14 @@ export default function ReceiptEntryDialog({
       uploaded_by_member_id: currentMemberId,
       participant_member_ids: participantMemberIds,
       items: normalizedItems,
-      image_key: initialReceipt?.image_key ?? null,
-      input_method: initialReceipt?.input_method ?? "MANUAL",
-      ocr_status: initialReceipt?.ocr_status ?? "NONE",
+      image_key:
+        analysisMetadata?.image_key ?? initialReceipt?.image_key ?? null,
+      input_method:
+        analysisMetadata?.input_method ??
+        initialReceipt?.input_method ??
+        "MANUAL",
+      ocr_status:
+        analysisMetadata?.ocr_status ?? initialReceipt?.ocr_status ?? "NONE",
       status: initialReceipt?.status ?? "ACTIVE",
       created_at: initialReceipt?.created_at ?? savedAt,
       updated_at: savedAt,
@@ -239,20 +319,22 @@ export default function ReceiptEntryDialog({
             <h2 id="receipt-entry-title">
               {isEditing
                 ? "내용을 확인하고 수정해 주세요"
-                : "등록 방식을 선택해 주세요"}
+                : analysisMetadata
+                  ? "분석 결과를 확인해 주세요"
+                  : "등록 방식을 선택해 주세요"}
             </h2>
           </div>
           <button
             className={styles.closeButton}
             type="button"
             aria-label={isEditing ? "영수증 수정 취소" : "영수증 추가 닫기"}
-            onClick={onClose}
+            onClick={handleClose}
           >
             ×
           </button>
         </div>
 
-        {!isEditing && (
+        {!isEditing && !analysisMetadata && (
           <>
             <div
               className={styles.methodTabs}
@@ -267,6 +349,7 @@ export default function ReceiptEntryDialog({
                   type="button"
                   role="tab"
                   aria-selected={selectedMethod === method.id}
+                  disabled={isAnalyzing}
                   key={method.id}
                   onClick={() => selectMethod(method.id)}
                 >
@@ -281,7 +364,13 @@ export default function ReceiptEntryDialog({
           </>
         )}
 
-        {isEditing || selectedMethod === "manual" ? (
+        {analysisMetadata && (
+          <p className={styles.methodDescription} role="status">
+            OCR 분석이 끝났어요. 메뉴와 금액을 확인하고 필요한 부분만 고쳐 주세요.
+          </p>
+        )}
+
+        {isEditing || selectedMethod === "manual" || analysisMetadata ? (
           <form className={styles.manualForm} onSubmit={handleSubmit}>
             <label className={styles.formField}>
               <span>영수증 소제목</span>
@@ -488,7 +577,7 @@ export default function ReceiptEntryDialog({
                 className={styles.secondaryButton}
                 type="button"
                 disabled={isSaving}
-                onClick={onClose}
+                onClick={handleClose}
               >
                 {isEditing ? "수정 취소" : "취소"}
               </button>
@@ -506,7 +595,11 @@ export default function ReceiptEntryDialog({
             </div>
           </form>
         ) : (
-          <section className={styles.photoMethod} aria-label="영수증 사진 선택">
+          <section
+            className={styles.photoMethod}
+            aria-label="영수증 사진 선택"
+            aria-busy={isAnalyzing}
+          >
             <div className={styles.photoMethodHeading}>
               <span aria-hidden="true">
                 {selectedMethod === "camera" ? "⌁" : "↑"}
@@ -517,7 +610,11 @@ export default function ReceiptEntryDialog({
                     ? "영수증을 촬영해 주세요"
                     : "영수증 사진을 골라 주세요"}
                 </strong>
-                <p>선택 이후 처리는 OCR 기능에서 연결할 예정이에요.</p>
+                <p role="status">
+                  {isAnalyzing
+                    ? "로컬 codex-cli가 메뉴와 금액을 분석하고 있어요."
+                    : "JPEG, PNG, WebP · 최대 10MB"}
+                </p>
               </div>
             </div>
 
@@ -525,13 +622,24 @@ export default function ReceiptEntryDialog({
               <input
                 className={styles.visuallyHidden}
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp"
+                disabled={isAnalyzing}
                 capture={
                   selectedMethod === "camera" ? "environment" : undefined
                 }
+                onChange={handlePhotoSelected}
               />
-              {selectedMethod === "camera" ? "카메라 열기" : "사진 선택하기"}
+              {isAnalyzing
+                ? "분석 중..."
+                : selectedMethod === "camera"
+                  ? "카메라 열기"
+                  : "사진 선택하기"}
             </label>
+            {validationMessage && (
+              <p className={styles.validationMessage} role="alert">
+                {validationMessage}
+              </p>
+            )}
           </section>
         )}
     </section>

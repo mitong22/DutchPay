@@ -171,7 +171,7 @@ function SoloMemberStep({ captain, draft }) {
 
       <div className={styles.formSection}>
         <p className={styles.fieldLabel}>총대</p>
-        <CaptainRow captain={captain} detail="테스트용 목업 계정 · 모든 비용 결제" />
+        <CaptainRow captain={captain} detail="로그인 계정 · 모든 비용 결제" />
       </div>
 
       <div className={styles.formSection}>

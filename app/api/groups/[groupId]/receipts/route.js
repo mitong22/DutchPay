@@ -1,5 +1,5 @@
 import { groupErrorResponse, saveReceipt } from "@/lib/groups";
-import { getGroupCredentials } from "@/lib/mockApiAuth";
+import { getGroupCredentials } from "@/lib/apiAuth";
 
 export async function POST(request, { params }) {
   try {
@@ -9,7 +9,7 @@ export async function POST(request, { params }) {
     ]);
     const receiptId = await saveReceipt(
       groupId,
-      getGroupCredentials(request, groupId),
+      await getGroupCredentials(request, groupId),
       { ...input, id: null, _id: null },
     );
 

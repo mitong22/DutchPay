@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { hasMockSession } from "@/lib/mockPageAuth";
+import { getCurrentUser } from "@/lib/auth";
 
 export default async function Home({ searchParams }) {
   const inviteValue = (await searchParams).invite;
@@ -10,5 +10,5 @@ export default async function Home({ searchParams }) {
     redirect(`/invite/${encodeURIComponent(inviteToken)}`);
   }
 
-  redirect((await hasMockSession()) ? "/dashboard" : "/login");
+  redirect((await getCurrentUser()) ? "/dashboard" : "/login");
 }

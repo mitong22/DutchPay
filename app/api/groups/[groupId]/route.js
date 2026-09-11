@@ -3,10 +3,10 @@ import {
   getGroup,
   groupErrorResponse,
 } from "@/lib/groups";
-import { getMockCaptain } from "@/lib/mockApiAuth";
+import { getRequestUser } from "@/lib/apiAuth";
 
 export async function GET(request, { params }) {
-  const captain = getMockCaptain(request);
+  const captain = await getRequestUser(request);
 
   if (!captain) {
     return Response.json({ message: "로그인이 필요해요." }, { status: 401 });
@@ -25,7 +25,7 @@ export async function GET(request, { params }) {
 }
 
 export async function PATCH(request, { params }) {
-  const captain = getMockCaptain(request);
+  const captain = await getRequestUser(request);
 
   if (!captain) {
     return Response.json({ message: "로그인이 필요해요." }, { status: 401 });

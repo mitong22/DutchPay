@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 
 import AuthenticatedApp from "@/component/authenticatedApp";
-import { MOCK_CAPTAIN } from "@/lib/mockCaptain";
 import { getPageGroupView } from "@/lib/pageGroupView";
 
 export default async function GroupDetail({ params }) {
@@ -12,7 +11,7 @@ export default async function GroupDetail({ params }) {
 
   return (
     <AuthenticatedApp
-      captain={MOCK_CAPTAIN}
+      captain={view.captain}
       groups={[view.group]}
       page="group"
       groupId={groupId}

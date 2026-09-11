@@ -1,6 +1,13 @@
 import process from "node:process";
 
+import { hashPassword } from "better-auth/crypto";
 import { MongoClient } from "mongodb";
+
+import {
+  TEST_ACCOUNT_EMAIL,
+  TEST_LOGIN_ID,
+  TEST_LOGIN_PASSWORD,
+} from "../lib/testAccount.mjs";
 
 const uri = process.env.MONGODB_URI;
 const databaseName = process.env.MONGODB_DB;
@@ -19,6 +26,7 @@ if (!isLocal || databaseName !== LOCAL_DATABASE) {
 
 const ids = {
   user: "mock-user-001",
+  account: "seed-account-yunha",
   activeGroup: "seed-group-active",
   completedGroup: "seed-group-completed",
   activeCaptain: "seed-member-active-yunha",
@@ -248,6 +256,10 @@ async function upsertDocuments(db, collectionName, documents) {
 async function createIndexes(db) {
   await Promise.all([
     db.collection("user").createIndex({ email: 1 }, { unique: true }),
+    db.collection("user").createIndex({ username: 1 }, { unique: true, sparse: true }),
+    db.collection("account").createIndex({ userId: 1 }),
+    db.collection("session").createIndex({ token: 1 }, { unique: true }),
+    db.collection("session").createIndex({ userId: 1 }),
     db.collection("expense_group").createIndex({ created_by: 1, created_at: -1 }),
     db.collection("group_member").createIndex({ group_id: 1 }),
     db.collection("group_member").createIndex(
@@ -297,6 +309,8 @@ try {
   await createIndexes(db);
   await db.collection("user").deleteOne({ _id: "seed-user-miyeon" });
   await Promise.all([
+    db.collection("account").deleteMany({ userId: ids.user }),
+    db.collection("session").deleteMany({ userId: ids.user }),
     db.collection("group_member").deleteMany({
       group_id: { $in: [ids.activeGroup, ids.completedGroup] },
     }),
@@ -313,12 +327,25 @@ try {
       group_id: { $in: [ids.activeGroup, ids.completedGroup] },
     }),
   ]);
+  const passwordHash = await hashPassword(TEST_LOGIN_PASSWORD);
   await upsertDocuments(db, "user", [
     {
       _id: ids.user,
       name: "윤하",
-      email: "demo@dutchpay.local",
+      email: TEST_ACCOUNT_EMAIL,
+      username: TEST_LOGIN_ID,
       emailVerified: true,
+      createdAt: dates.completedCreated,
+      updatedAt: dates.completedCreated,
+    },
+  ]);
+  await upsertDocuments(db, "account", [
+    {
+      _id: ids.account,
+      accountId: ids.user,
+      providerId: "credential",
+      userId: ids.user,
+      password: passwordHash,
       createdAt: dates.completedCreated,
       updatedAt: dates.completedCreated,
     },
@@ -330,7 +357,14 @@ try {
 
   const counts = Object.fromEntries(
     await Promise.all(
-      ["user", "expense_group", "group_member", "receipts", "payment"].map(
+      [
+        "user",
+        "account",
+        "expense_group",
+        "group_member",
+        "receipts",
+        "payment",
+      ].map(
         async (collectionName) => [
           collectionName,
           await db.collection(collectionName).countDocuments(),

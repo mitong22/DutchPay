@@ -1,5 +1,5 @@
 import { deleteReceipt, groupErrorResponse, saveReceipt } from "@/lib/groups";
-import { getGroupCredentials } from "@/lib/mockApiAuth";
+import { getGroupCredentials } from "@/lib/apiAuth";
 
 export async function PATCH(request, { params }) {
   try {
@@ -9,7 +9,7 @@ export async function PATCH(request, { params }) {
     ]);
     const savedReceiptId = await saveReceipt(
       groupId,
-      getGroupCredentials(request, groupId),
+      await getGroupCredentials(request, groupId),
       { ...input, id: receiptId },
     );
 
@@ -25,7 +25,7 @@ export async function DELETE(request, { params }) {
     await deleteReceipt(
       groupId,
       receiptId,
-      getGroupCredentials(request, groupId),
+      await getGroupCredentials(request, groupId),
     );
 
     return new Response(null, { status: 204 });

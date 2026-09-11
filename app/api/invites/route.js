@@ -10,7 +10,7 @@ import {
 } from "@/lib/invites";
 import { GUEST_COOKIE_MAX_AGE, guestCookieName } from "@/lib/inviteTokens.mjs";
 import { groupErrorResponse } from "@/lib/groups";
-import { getGroupCredentials, getMockCaptain } from "@/lib/mockApiAuth";
+import { getGroupCredentials, getRequestUser } from "@/lib/apiAuth";
 
 const COOKIE_OPTIONS = {
   httpOnly: true,
@@ -28,7 +28,7 @@ function readToken(body) {
 }
 
 export async function POST(request) {
-  const captain = getMockCaptain(request);
+  const captain = await getRequestUser(request);
 
   if (!captain) {
     return Response.json({ message: "로그인이 필요해요." }, { status: 401 });
@@ -53,7 +53,7 @@ export async function GET(request) {
     const groupId = await getInviteGroupId(token);
     const invite = await getInvite(
       token,
-      getGroupCredentials(request, groupId),
+      await getGroupCredentials(request, groupId),
     );
 
     return Response.json({ invite });
@@ -70,7 +70,7 @@ export async function PATCH(request) {
     const result = await joinInvite(
       token,
       body?.nickname,
-      getGroupCredentials(request, groupId),
+      await getGroupCredentials(request, groupId),
     );
     const response = NextResponse.json({
       invite: result.invite,
@@ -92,7 +92,7 @@ export async function PATCH(request) {
 }
 
 export async function DELETE(request) {
-  const captain = getMockCaptain(request);
+  const captain = await getRequestUser(request);
 
   if (!captain) {
     return Response.json({ message: "로그인이 필요해요." }, { status: 401 });
@@ -113,7 +113,7 @@ export async function DELETE(request) {
 }
 
 export async function PUT(request) {
-  const captain = getMockCaptain(request);
+  const captain = await getRequestUser(request);
 
   if (!captain) {
     return Response.json({ message: "로그인이 필요해요." }, { status: 401 });

@@ -6,9 +6,9 @@ import { useRouter } from "next/navigation";
 import BrandLogo from "../brandLogo";
 import styles from "../app.module.css";
 import {
-  MOCK_LOGIN_ID,
-  MOCK_LOGIN_PASSWORD,
-} from "@/lib/mockSession.mjs";
+  TEST_LOGIN_ID,
+  TEST_LOGIN_PASSWORD,
+} from "@/lib/testAccount.mjs";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -22,12 +22,13 @@ export default function LoginPage() {
     setValidationMessage("");
 
     try {
-      const response = await fetch("/api/mock-session", {
+      const response = await fetch("/api/auth/sign-in/username", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          loginId: formData.get("loginId"),
+          username: formData.get("loginId"),
           password: formData.get("password"),
+          rememberMe: true,
         }),
       });
       const result = await response.json();
@@ -37,6 +38,7 @@ export default function LoginPage() {
       }
 
       router.replace("/dashboard");
+      router.refresh();
     } catch (error) {
       setValidationMessage(error.message);
       setIsSubmitting(false);
@@ -77,8 +79,8 @@ export default function LoginPage() {
           </div>
 
           <dl className={styles.testCredentials} aria-label="테스트 계정 정보">
-            <div><dt>아이디</dt><dd>{MOCK_LOGIN_ID}</dd></div>
-            <div><dt>비밀번호</dt><dd>{MOCK_LOGIN_PASSWORD}</dd></div>
+            <div><dt>아이디</dt><dd>{TEST_LOGIN_ID}</dd></div>
+            <div><dt>비밀번호</dt><dd>{TEST_LOGIN_PASSWORD}</dd></div>
           </dl>
 
           <form className={styles.loginForm} onSubmit={login}>
@@ -90,7 +92,7 @@ export default function LoginPage() {
               type="text"
               inputMode="numeric"
               autoComplete="username"
-              placeholder={MOCK_LOGIN_ID}
+              placeholder={TEST_LOGIN_ID}
               required
               onChange={() => setValidationMessage("")}
             />
@@ -102,7 +104,7 @@ export default function LoginPage() {
               type="password"
               inputMode="numeric"
               autoComplete="current-password"
-              placeholder={MOCK_LOGIN_PASSWORD}
+              placeholder={TEST_LOGIN_PASSWORD}
               required
               onChange={() => setValidationMessage("")}
             />

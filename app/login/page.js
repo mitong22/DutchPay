@@ -1,13 +1,12 @@
 import { redirect } from "next/navigation";
 
 import LoginPage from "@/component/pages/loginPage";
-import { MOCK_CAPTAIN } from "@/lib/mockCaptain";
-import { hasMockSession } from "@/lib/mockPageAuth";
+import { getCurrentUser } from "@/lib/auth";
 
 export default async function Login() {
-  if (await hasMockSession()) {
+  if (await getCurrentUser()) {
     redirect("/dashboard");
   }
 
-  return <LoginPage captain={MOCK_CAPTAIN} />;
+  return <LoginPage />;
 }

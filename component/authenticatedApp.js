@@ -133,7 +133,11 @@ export default function AuthenticatedApp({
       return;
     }
 
-    const response = await fetch("/api/mock-session", { method: "DELETE" });
+    const response = await fetch("/api/auth/sign-out", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
 
     if (response.ok) {
       router.replace("/login");
@@ -152,7 +156,7 @@ export default function AuthenticatedApp({
         <div className={styles.accountActions}>
           <div className={styles.captain}>
             <span className={styles.captainLabel}>
-              {isGuest ? "비회원 참여자" : "테스트 총대"}
+              {isGuest ? "비회원 참여자" : "총대 계정"}
             </span>
             <strong>{accountNickname}</strong>
           </div>

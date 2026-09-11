@@ -14,7 +14,7 @@ const databaseName = process.env.MONGODB_DB;
 const LOCAL_DATABASE = "dutchpay_dev";
 
 if (!uri || !databaseName) {
-  throw new Error("MONGODB_URI와 MONGODB_DB를 .env.local에 설정해 주세요.");
+  throw new Error("로컬 개발용 MongoDB 환경변수가 설정되지 않았습니다.");
 }
 
 const parsedUri = new URL(uri);

@@ -18,6 +18,7 @@ function LoginPanel({ loginError, demoEnabled }) {
   );
 
   async function submit(event) {
+    // Teacher: 같은 폼도 로그인은 기본 POST /login으로, 가입은 preventDefault 후 Better Auth Client 호출로 갑니다. 두 갈래의 데이터 전달·쿠키 반영·오류 표시 경로를 그리고, 별도 폼으로 분리한 대안과 비교해 보기.
     if (kind === "login") return;
     event.preventDefault();
     setPending(true);

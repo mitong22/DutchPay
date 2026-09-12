@@ -49,6 +49,7 @@ export async function POST(request) {
     const format = FORMATS.get(file.type);
     if (!format) fail(415, "JPG 또는 PNG 영수증만 인식할 수 있습니다.");
 
+    // Teacher: 사진은 브라우저 → 이 서버 → 외부 OCR로 전달되고 비밀키는 서버에서 붙입니다. FormData와 JSON 요청의 차이, OCR 결과가 즉시 DB 저장되는지 또는 편집 초안으로 돌아가는지를 구분해 보기.
     const invokeUrl = process.env.CLOVA_OCR_INVOKE_URL;
     const secret = process.env.CLOVA_OCR_SECRET;
     if (!invokeUrl || !secret) {

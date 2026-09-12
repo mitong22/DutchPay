@@ -48,6 +48,7 @@ function receiptDraft(receipt, members, viewerMemberId) {
   };
 }
 
+// Teacher: 한 파일에 영수증 편집·OCR·모임 보드가 함께 있습니다. props와 콜백의 이동 경로를 먼저 그린 뒤, AI에게 ReceiptEditor를 같은 기능 폴더로 분리하는 안을 요청해 독립적으로 읽기 쉬운지 비교해 보기.
 function ReceiptEditor({ draft, groupId, members, onClose, onSave, saving }) {
   const [receipt, setReceipt] = useState(draft);
   const [tab, setTab] = useState("manual");
@@ -68,6 +69,7 @@ function ReceiptEditor({ draft, groupId, members, onClose, onSave, saving }) {
     if (photoPreviewUrlRef.current) URL.revokeObjectURL(photoPreviewUrlRef.current);
   }, []);
 
+  // Teacher: createObjectURL은 브라우저 메모리의 파일 미리보기 주소를 만듭니다. 업로드된 서버 URL과 구분하고, 사진 교체와 컴포넌트 종료 때 revokeObjectURL로 해제하는 위치를 찾아보기.
   function selectPhoto(file) {
     if (photoPreviewUrlRef.current) URL.revokeObjectURL(photoPreviewUrlRef.current);
     const url = file ? URL.createObjectURL(file) : "";
@@ -78,6 +80,7 @@ function ReceiptEditor({ draft, groupId, members, onClose, onSave, saving }) {
     setOcrError("");
   }
 
+  // Teacher: setReceipt의 current는 최신 상태이고, 바깥 객체·items 배열·변경 메뉴를 각각 새로 만듭니다. 메뉴 2개 중 하나를 고치는 예제로 객체 참조를 그려 보고, AI에게 반복문 버전으로 풀어 달라고 요청해 보기.
   function updateItem(index, patch) {
     setReceipt((current) => ({
       ...current,
@@ -212,6 +215,7 @@ function ReceiptEditor({ draft, groupId, members, onClose, onSave, saving }) {
           </div>
         )}
 
+        {/* // Teacher: 이 폼은 preventDefault 후 JSON을 만들어 onSave로 넘깁니다. submit → saveReceipt → post → API의 input.action 분기까지 추적하고, 수업의 form + Server Action으로 줄이는 안과 비교해 보기. */}
         <form className="receipt-form" onSubmit={submit}>
           <div className="two-columns">
             <label>
@@ -351,6 +355,7 @@ export default function BoardClient({ initialBoard }) {
   const router = useRouter();
   const { group, members, receipts, viewer } = initialBoard;
   const [selectedId, setSelectedId] = useState(receipts[0]?._id ?? null);
+  // Teacher: 참여자 필터와 선택 영수증을 로컬 state에 둡니다. 새로고침·뒤로가기·URL 공유 때 유지되는지 확인하고, 수업의 검색·필터를 searchParams로 전달하는 방식과 비교해 보기.
   const [memberFilterId, setMemberFilterId] = useState(
     viewer.memberId ?? members[0]?._id ?? null,
   );
@@ -359,6 +364,7 @@ export default function BoardClient({ initialBoard }) {
   const [finishing, setFinishing] = useState(false);
   const [inviteUrls, setInviteUrls] = useState([]);
   const [notice, setNotice] = useState("");
+  // Teacher: useMemo는 의존값이 같을 때 계산 결과를 재사용하는 Hook입니다. 수업의 기본 Hook만 쓰는 안으로 먼저 일반 Map·배열 계산을 해 보고, 실제 비용을 확인한 뒤 세 군데 메모이제이션이 필요한지 논의해 보기.
   const memberById = useMemo(
     () => new Map(members.map((member) => [member._id, member])),
     [members],

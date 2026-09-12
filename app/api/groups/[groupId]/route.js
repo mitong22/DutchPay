@@ -13,6 +13,7 @@ import {
 } from "@/lib/groups";
 import { getGuestToken } from "@/lib/guest-session.mjs";
 
+// Teacher: 하나의 POST가 input.action에 따라 저장·삭제·상태 변경·초대를 처리합니다. 기능별 권한 검사가 어느 lib 함수에 있는지 표로 정리하고, 독립 Server Action으로 나누면 읽기 쉬워지는지 AI와 비교해 보기.
 export async function POST(request, { params }) {
   try {
     const { groupId } = await params;

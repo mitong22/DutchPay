@@ -35,6 +35,7 @@ export async function POST(request) {
     status: 303,
     headers: { location: authResponse.ok ? "/" : "/?loginError=1" },
   });
+  // Teacher: Better Auth가 만든 로그인 쿠키를 실제 브라우저 응답에 옮기는 부분입니다. 로그인 결과 객체만 반환하면 왜 세션이 유지되지 않을 수 있는지, 아래 응답의 303 이동과 함께 설명해 보기.
   for (const cookie of authResponse.headers.getSetCookie()) {
     response.headers.append("set-cookie", cookie);
   }

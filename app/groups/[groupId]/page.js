@@ -16,6 +16,7 @@ export const metadata = {
 };
 
 export default async function GroupPage({ params, searchParams }) {
+  // Teacher: connection은 이 페이지 아래 작업을 요청 시점에 실행하도록 하는 표시입니다. Server Component라는 실행 위치와는 구분하세요. params.groupId는 모임 조회 조건, searchParams.receipt는 선택할 영수증이며 URL을 바꾸면 서버에서 이 흐름을 다시 실행합니다.
   await connection();
   const [{ groupId }, query] = await Promise.all([params, searchParams]);
   const context = await getGroupContext(groupId);
@@ -26,6 +27,7 @@ export default async function GroupPage({ params, searchParams }) {
 
   const selectedReceiptId =
     typeof query.receipt === "string" ? query.receipt : null;
+  // Teacher: 페이지가 회원·영수증·초대·결제 정보를 한꺼번에 읽어 여러 Server Component에 전달합니다. AGENTS.md는 실제 데이터를 쓰는 Server Component에서 조회하고 props를 최소화하도록 합니다. WAITING 화면에서도 필요한 조회인지 나눠 보고, 공통 정산 계산에 필요한 데이터와 각 화면 전용 데이터를 AI와 함께 구분해 보세요.
   const workspace = await getGroupWorkspaceData(groupId, selectedReceiptId);
 
   if (context.group.status === "WAITING") {

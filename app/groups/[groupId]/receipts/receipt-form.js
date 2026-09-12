@@ -83,6 +83,7 @@ function MemberCheckbox({
         disabled={disabled}
         onChange={(event) => onChange(event.target.checked)}
       />
+      {/* // Teacher: HTML에서 disabled인 input은 체크되어 있어도 FormData에서 빠집니다. 마지막 한 명을 해제하지 못하게 막으면서 그 ID는 전송하려고 hidden input을 추가했습니다. AI에게 checked/disabled 조합별 제출값을 비교하게 하고, hidden 값도 서버의 참여자 검증 대상임을 확인하세요. */}
       {checked && disabled ? (
         // disabled 입력값은 폼 제출에서 빠지므로 마지막 한 명의 ID를 별도로 전송한다.
         <input name={name} type="hidden" value={member.id} />
@@ -95,12 +96,14 @@ function MemberCheckbox({
   );
 }
 
+// Teacher: 입력 방식 안내·임시 OCR 반영·참여자 선택·메뉴 편집이 한 파일에 모여 있습니다. AGENTS.md의 긴 파일 분리 기준에 맞춰 AI에게 역할별 분리안을 먼저 설명하게 해 보세요. menus와 participantMemberIds를 누가 소유하고 어떤 값·이벤트를 전달할지 정한 뒤 같은 기능 폴더 안에서 나누는 것이 학습 포인트입니다.
 export default function ReceiptForm({
   group,
   members,
   initialReceipt,
   temporaryReceiptDataEnabled = false,
 }) {
+  // Teacher: bind가 groupId와 receiptId를 앞에 고정하고, useActionState가 previousState와 formData를 뒤에 전달합니다. actions.js의 인자 네 개와 순서대로 연결해 보세요. Client에서 받은 ID만 믿지 않고 createReceipt/updateReceipt가 현재 회원과 수정 권한을 다시 확인하는 흐름도 함께 읽으세요.
   const saveAction = saveReceiptAction.bind(
     null,
     group.id,
@@ -140,6 +143,7 @@ export default function ReceiptForm({
     })),
   );
 
+  // Teacher: 참여자를 바꾸면 이 Effect도 다시 실행됩니다. 같은 loadId를 이미 반영했는지 useRef로 기억해야 수동 편집 중인 메뉴를 임시 OCR 값으로 덮어쓰지 않습니다. AI에게 최초 불러오기 → 메뉴 수정 → 참여자 변경 순서로 state와 ref 값의 변화를 표로 설명하게 해 보세요.
   useEffect(() => {
     if (
       temporaryDataState.status !== "success" ||
@@ -176,6 +180,7 @@ export default function ReceiptForm({
       return;
     }
 
+    // Teacher: 영수증에서 한 사람을 제외하면 모든 메뉴의 consumerMemberIds에서도 그 사람을 제거합니다. 아래 map → 객체 복사 → filter를 중간 변수와 for문으로 풀어 읽어 보세요. 이때 어떤 메뉴의 참여자가 0명이 되면 화면과 서버 검증이 각각 어떻게 처리하는지도 확인할 부분입니다.
     setParticipantMemberIds(
       participantMemberIds.filter(
         (participantMemberId) => participantMemberId !== memberId,

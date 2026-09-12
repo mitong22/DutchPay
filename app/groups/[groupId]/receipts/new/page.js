@@ -31,6 +31,7 @@ export default async function NewReceiptPage({ params }) {
     notFound();
   }
 
+  // Teacher: Client 폼에 필요한 두 필드만 보내지만 _id를 id로 다시 이름 붙여 화면·서버가 서로 다른 이름을 씁니다. 업무 데이터 _id는 이미 UUID 문자열입니다. AGENTS.md의 원본 문서 전달 기준과 비교해, DB projection으로 필요한 필드만 조회하고 _id 이름을 유지하는 방식이 더 단순한지 검토해 보세요.
   const memberInputs = members.map((member) => ({
     id: member._id,
     nickname: member.nickname,

@@ -79,6 +79,7 @@ export async function saveReceiptAction(
     };
   }
 
+  // Teacher: redirect는 일반적인 return이 아니라 Next.js가 처리할 특수한 예외로 흐름을 끝냅니다. 그래서 입력 오류를 반환하는 catch 바깥에서 호출합니다. 성공 시 URL의 receipt 값이 GroupPage의 searchParams로 이어져 방금 저장한 영수증을 선택하는 흐름을 찾아보세요.
   revalidatePath(`/groups/${groupId}`);
   redirect(`/groups/${groupId}?receipt=${savedReceiptId}`);
 }

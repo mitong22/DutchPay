@@ -59,6 +59,7 @@ export default function ReceiptEntryDialog({
   const participantMembers = group.members.filter((member) =>
     participantMemberIds.includes(member.id),
   );
+  // Teacher: 입력값은 문자열이고 미리보기에서 숫자로 바꿉니다. 빈값·0·정상 수량의 계산 경로를 적고, AI에게 reduce를 for...of 합산으로 풀게 한 뒤 서버 normalizeReceipt의 검증과 비교해 보기.
   const draftTotal = items.reduce((total, item) => {
     const quantity = Number(item.quantity);
     const amount = Number(item.amount);
@@ -82,6 +83,7 @@ export default function ReceiptEntryDialog({
     onClose();
   }
 
+  // Teacher: 영수증 참여자에서 빼면 모든 메뉴의 소비자 목록에서도 제거합니다. 바깥 배열·메뉴 객체·소비자 배열을 새로 만드는 위치를 찾고, 직접 수정 대신 map·filter를 쓰는 이유를 작은 예제로 확인해 보기.
   function toggleReceiptParticipant(memberId) {
     const nextMemberIds = participantMemberIds.includes(memberId)
       ? participantMemberIds.filter((id) => id !== memberId)

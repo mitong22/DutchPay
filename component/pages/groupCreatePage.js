@@ -317,6 +317,7 @@ function TogetherMemberStep({ captain, draft }) {
     }
 
     syncParticipants();
+    // Teacher: 1초마다 다시 요청하는 폴링입니다. 응답이 1초보다 늦을 때 요청이 겹치는지와 이전 응답이 늦게 도착하는 경우를 확인하고, AI에게 응답 후 다음 요청을 예약하는 순차 방식과 비교하게 해 보기.
     const intervalId = window.setInterval(syncParticipants, 1000);
 
     return () => {

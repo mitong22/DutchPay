@@ -49,6 +49,7 @@ export default function AuthenticatedApp({
     //  - refresh: 현재 페이지 서버 데이터 다시 불러오기
   
   // 변경 될 때마다 화면을 다시 그리기 위한 스냅샷
+  // Teacher: 수업의 기본 Hook 밖인 useSyncExternalStore는 localStorage 변경 구독과 스냅샷 읽기를 연결합니다. 세 콜백이 언제 실행되는지 확인하고, AI에게 useState·useEffect로 푼 초안 저장 방식과 복잡도를 비교하게 해 보기.
   const draftSnapshot = useSyncExternalStore(
     // groupDraftStore 정의 함수들
     subscribeToDraftStore, // 저장 데이터 변경 여부 판단
@@ -97,6 +98,7 @@ export default function AuthenticatedApp({
     return result.group;
   }
 
+  // Teacher: 초안 검증 후 PUT 초대 활성화 또는 POST 모임 생성을 선택합니다. draft와 DB의 모임을 구분하고, fetch → Route Handler → lib → DB를 수업의 form + Server Action 흐름과 비교해 보기.
   async function createGroup() {
     const message = getSetupError(draft, captain);
 

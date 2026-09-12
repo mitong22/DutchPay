@@ -85,6 +85,7 @@ export default function GroupBoard({
 
   return (
     <main className={styles.boardMain}>
+      {/* // Teacher: Client의 isCaptain·canEdit는 버튼 표시를 위한 값입니다. API의 getGroupCredentials와 lib의 assertReceiptEditor가 실제 저장 권한을 다시 검사하는지 호출 경로를 찾아보기. */}
       <nav className={styles.boardNavigation} aria-label="모임 화면 탐색">
         <button type="button" onClick={onBack}>← 대시보드</button>
         <div className={styles.boardStatusActions}>
